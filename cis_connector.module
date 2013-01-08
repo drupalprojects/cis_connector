@@ -1,0 +1,321 @@
+<?php
+/**
+ * Implements hook_init().
+ */
+function cis_connector_init() {
+  // stub just so that drupal bootstraps this library
+}
+/**
+ * Build the registry of educational connectors
+ */
+function _cis_connector_build_registry($component = NULL) {
+  // invoke special hook for registry settings
+  $settings = module_invoke_all('cis_service_registry');
+  // follows best practice of drupal but only provided for future override potential
+  drupal_alter('cis_service_registry', $settings);
+  if (!is_null($component)) {
+    // validate that this component exists
+    if (isset($settings[$component])) {
+      return $settings[$component];
+    }
+    return FALSE;
+  }
+  // validate settings were found
+  if (!empty($settings)) {
+    return $settings;
+  }
+  return FALSE;
+}
+
+/**
+ * Wrapper for structured calls against CIS system
+ */
+function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL) {
+  // invoke special hook for registry settings
+  if ($settings = _cis_connector_build_registry('cis')) {
+    $address = _cis_connector_format_address($settings);
+    // options for method
+    $options = array('method' => $method);
+    // allow for PUT requests which require use of the data property
+    if (!empty($data)) {
+      $options['data'] = drupal_json_encode($data);
+      $options['headers'] = array('Content-Type' => 'application/json');
+    }
+    // build the call
+    $call = $address . '/' . $entity_type . '/' . $id;
+    if (!empty($format)) {
+      $call .= '.' . $format;
+    }
+    // generate the well structured request
+    $response = drupal_http_request($call, $options);
+    // parse format correctly for return if we can
+    switch ($format) {
+      case 'json':
+        $data = drupal_json_decode($response->data);
+      break;
+      case 'xml':
+        $data = simplexml_load_string($response->data);
+      break;
+      default:
+        $data = $response->data;
+      break;
+    }
+  }
+  else {
+    drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
+    $data = FALSE;
+  }
+  return $data;
+}
+
+/**
+ * Wrapper for structured updates to data in CIS.
+ */
+function _cis_connection_set_data($select, $data) {
+  // query to get an information set
+  $resp = _cis_connection_query($select);
+  // if we have an item, its a valid item
+  if (!empty($resp['list'])) {
+    // update all items that were found
+    foreach ($resp['list'] as $response_item) {
+      // post back to CIS
+      _cis_connection_object($response_item['nid'], 'node', NULL, 'PUT', $data);
+    }
+  }
+}
+
+/**
+ * Wrapper for structured queries against CIS system
+ */
+function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET') {
+  // invoke special hook for registry settings
+  if ($settings = _cis_connector_build_registry('cis')) {
+    $address = _cis_connector_format_address($settings);
+    // options for method
+    $options = array('method' => $method);
+    // build the call
+    $call = $address . '/' . $entity_type . '.' . $format . '?' . http_build_query($query);
+    // generate the well structured request
+    $response = drupal_http_request($call, $options);
+    //dpm($response);
+    // parse format correctly for return if we can
+    switch ($format) {
+      case 'json':
+        $data = drupal_json_decode($response->data);
+      break;
+      case 'xml':
+        $data = simplexml_load_string($response->data);
+      break;
+      default:
+        $data = $response->data;
+      break;
+    }
+  }
+  else {
+    drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
+    $data = FALSE;
+  }
+  return $data;
+}
+/**
+ * Return a well formed address based on certain values.
+ */
+function _cis_connector_format_address($settings) {
+  // start with protocol
+  $address = $settings['protocol'] . '://';
+  // optional HTTP authenticated request, required in any *real* environment
+  if (isset($settings['user'])) {
+    $address .= $settings['user'] . ':' . $settings['pass'] . '@';
+  }
+  // append the connection address
+  $address .= $settings['service_address'];
+  return $address;
+}
+
+/**
+ * Swap file path from service_address to real file location
+ */
+function _cis_connector_real_address($path) {
+  // verify settings bucket exist
+  if ($settings = _cis_connector_build_registry('cis')) {
+    return str_replace($settings['service_address'], $settings['address'], $path);
+  }
+}
+
+/**
+ * Returns the user's section context from their profile
+ */
+function _cis_connector_section_context($account = NULL) {
+  // use current user if acount is not set
+  if (empty($account)) {
+    global $user;
+    $account = $user;
+  }
+  // load user by profile2 profile that's been set
+  $profile = profile2_load_by_user($account);
+  // ensure profile is set
+  if (isset($profile['main'])) {
+    // pull out the section value if available
+    $section = $profile['main']->field_section['und'][0]['safe_value'];
+  }
+  else {
+    $section = '12345';
+  }
+  // return section in question
+  return $section;
+}
+
+/**
+ * Callback to return structured data
+ */
+function _cis_connector_transaction($request, $format = 'default', $query = array()) {
+  // return false if we don't match a request
+  $output = FALSE;
+  // grab section context of the user
+  $section = _cis_connector_section_context();
+  // form the commonly used base query
+  $base_query = array('field_access_string' => $section, 'archived' => 0);
+  // process request
+  switch ($request) {
+    case 'inst-outline':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // pull the outline to use
+      $output = $cis_section_item['list'][0]['field_instructional_outline'];
+      // redirect to the UUID which will bounce to node uri
+      drupal_goto('uuid/node/' . $output);
+    break;
+    case 'contact_info':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // return an array with input format and textual content of contact info
+      $output = $cis_section_item['list'][0]['field_contact_info'];
+    break;
+    case 'help':
+    case 'resources':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // make sure it got data
+      if (!empty($cis_section_item)) {
+        $list = '';
+        if ($request == 'resources') {
+          // loop through resources associated to build their info
+          foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
+            $resource = _cis_connection_object($reid['id'], $reid['resource']);
+            $list .= '<h2>' . $resource['title'] . '</h2>';
+            $list .= $resource['body']['value'];
+          }
+        }
+        // request the standard resource language
+        $query = array('type' => 'resource', 'field_machine_name' => $request . '_page');
+        $resource_page = _cis_connection_query($query);
+        // render text applying the input filter requested
+        $resource_page['list'][0]['body']['value'] .= $list;
+        // send the text with format for processing
+        $output = $resource_page['list'][0]['body'];
+      }
+    break;
+    case 'section_dates':
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // pull back access duration
+      $dates = $cis_section_item['list'][0]['field_access_dates'];
+      // pull back the date class officially begins
+      $class_begin = $cis_section_item['list'][0]['field_course_start'];
+      // return access start and end timestamps
+      $output = array('start' => $dates['value'], 'class_begin' => $class_begin, 'end' => $dates['value2']);
+    break;
+    case 'activation_code':
+      // request the code input by the user
+      $codes = _cis_connection_query($query, 'activation_code');
+      // ensure we found 1 code
+      if (count($codes['list']) == 1) {
+        $code = $codes['list'][0];
+        global $user;
+        // verify this was never used before
+        if ($code['used'] == 0 && $code['name'] == '' && $code['granted'] == '') {        
+          $query = array('used' => REQUEST_TIME, 'name' => $user->name, 'granted' => str_replace('/', '', base_path()));
+          // internal code id to query against path for update
+          _cis_connection_object($code['acid'], 'activation_code', NULL, 'PUT', $query);
+          // TRUE
+          $output = ACTIVATION_CODE_ACCESS_GRANT;
+        }
+        // edge case where system revoked their access incorrectly
+        // this helps improve integrity if a roster sync is inaccurate
+        if ($code['used'] != 0 && $code['name'] == $user->name && $code['granted'] == str_replace('/', '', base_path())) {
+          $output = ACTIVATION_CODE_ACCESS_GRANT;
+        }
+        else {
+          // a different user already used this code
+          if ($code['name'] != $user->name) {
+            drupal_set_message(t('Another user already used this code! ECODE: REUSE'), 'error');
+          }
+          else {
+            // user has tried to use a valid code again; in a different course
+            drupal_set_message(t('This code has been used already to unlock access in another course! ECODE: OTHER'), 'error');
+          }
+          $output = ACTIVATION_CODE_ACCESS_DENY;
+        }
+      }
+      else {
+        $output = ACTIVATION_CODE_ACCESS_DENY;
+      }
+    break;
+    case 'welcome_letter':
+    case 'materials_letter':
+    case 'syllabus':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // make sure it got data
+      if (!empty($cis_section_item)) {
+        // make sure a file was uploaded for this request
+        if (isset($cis_section_item['list'][0]['field_' . $request])) {
+          $file = _cis_connection_object($cis_section_item['list'][0]['field_' . $request]['file']['id'], 'file');
+        }
+        // if a url is set we have a file
+        if (isset($file['url'])) {
+          // return the file as a download
+          if ($format == 'download') {
+            // return the file via direct http call
+            $file_contents = drupal_http_request($file['url']);
+            // set the content type to the file returned info
+            drupal_add_http_header('Content-type', $file['mime']);
+            // set the filename to the file returned info
+            drupal_add_http_header('Content-Disposition', 'attachment; filename="' . $file['name'] . '"');
+            // prompt headers for file download
+            drupal_send_headers();
+            // write the data of the request to the screen
+            print $file_contents->data;
+            exit;
+          }
+          else {
+            // request the standard language
+            $query = array('type' => 'resource', 'field_machine_name' => $request);
+            $resource = _cis_connection_query($query);
+            // render text applying the input filter requested
+            $output = check_markup($resource['list'][0]['body']['value'], $resource['list'][0]['body']['format']);
+            // append a download link
+            $output .= l(t('Download @request (PDF)', array('@request' => drupal_ucfirst($request))), $file['url']);
+          }
+        }
+        else {
+          // file wasn't found
+          $output = t('Please request a copy of the "@request" from your instructor', array('@request' => str_replace('_', ' ', $request)));
+        }
+      }
+      else {
+        $output = t('You must be enrolled in this course in order to view the @request', array('@request' => $request));
+      }
+    break;
+  }
+  return $output;
+}

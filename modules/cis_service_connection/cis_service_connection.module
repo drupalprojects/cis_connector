@@ -1,0 +1,184 @@
+<?php
+define('CIS_SERVICE_CONNECTION_SYNC_FREQUENCY', 1);
+define('CIS_SERVICE_CONNECTION_HOMEPAGE', 'welcome_letter');
+/**
+ * Implements hook_menu().
+ */
+function cis_service_connection_menu() {
+  $items = array();
+  // standard language from cis
+  $items['welcome_letter'] = array(
+    'title' => 'Welcome',
+    'page callback' => '_cis_connector_transaction',
+    'page arguments' => array(0),
+    'menu_name' => 'main-menu',
+    'weight' => -1,
+    'access arguments' => array('access content'),
+  );
+  // standard language from cis
+  $items['syllabus'] = array(
+    'title' => 'Syllabus',
+    'page callback' => '_cis_connector_transaction',
+    'page arguments' => array(0),
+    'menu_name' => 'main-menu',
+    'weight' => 0,
+    'access arguments' => array('access content'),
+  );
+  // standard language from cis for help
+  $items['help'] = array(
+    'title' => 'Help',
+    'page callback' => '_cis_service_connection_page',
+    'page arguments' => array(0),
+    'menu_name' => 'main-menu',
+    'weight' => 1,
+    'access arguments' => array('access content'),
+  );
+  // standard language from cis
+  $items['resources'] = array(
+    'title' => 'Resources',
+    'page callback' => '_cis_service_connection_page',
+    'page arguments' => array(0),
+    'menu_name' => 'main-menu',
+    'weight' => 2,
+    'access arguments' => array('access content'),
+  );
+  // direct download of the welcome letter, useful for remote referencing
+  $items['welcome_letter/download'] = array(
+    'title' => 'Welcome letter',
+    'page callback' => '_cis_connector_transaction',
+    'page arguments' => array(0, 1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+  // direct download of the welcome letter, useful for remote referencing
+  $items['materials_letter/download'] = array(
+    'title' => 'Materials letter',
+    'page callback' => '_cis_connector_transaction',
+    'page arguments' => array(0, 1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+  // direct download of the syllabus, useful for remote referencing
+  $items['syllabus/download'] = array(
+    'title' => 'Syllabus',
+    'page callback' => '_cis_connector_transaction',
+    'page arguments' => array(0, 1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+  return $items;
+}
+
+/**
+ * Callback to assemble pages correctly.
+ */
+function _cis_service_connection_page($request) {
+  if (module_exists('tableofcontents')) {
+    $suffix = '[toc]';
+  }
+  else {
+    $suffix = '';
+  }
+  // allow for per option processing
+  switch ($request) {
+    case 'help':
+      // first thing student sees is instructor contact info
+      $info = _cis_connector_transaction('contact_info');
+      // render text applying the input filter requested
+      if (isset($info['value'])) {    
+        $suffix .= '<h2>' . t('Instructor Contact') . '</h2>' . $info['value'];
+      }
+    break;
+  }
+  // apply traditional transaction for the request
+  $body = _cis_connector_transaction($request);
+  $body['value'] = $suffix . $body['value'];
+  // check the markup of the format
+  $output = check_markup($body['value'], $body['format']);
+  // only process if enabled
+  if (module_exists('tableofcontents')) {
+    _tableofcontents_process_text($output);
+  }
+  return $output;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function cis_service_connection_cron() {
+  $frequency = variable_get('cis_service_connection_sync_frequency', CIS_SERVICE_CONNECTION_SYNC_FREQUENCY);
+  $interval = 86400 * $frequency;
+  // if last sync isn't set this is the first cron run
+  if (variable_get('cis_service_connection_last_sync', 0) == 0) {
+    // perform the initial setup routine
+    // this will help bind the CIS to this instance of the service
+    _cis_service_connection_initial_cis_bind();
+  }
+  // if last sync is less then the update interval, update
+  if ((REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval) {
+    // select the service instance in question based on uuid
+    $select = array(
+      'type' => 'service_instance',
+      'uuid' => variable_get('cis_service_instance_uuid', '')
+    );
+    $data = module_invoke_all('set_cis_service_data', 'interval');
+    // set the data in the CIS
+    _cis_connection_set_data($select, $data);
+    variable_set('cis_service_connection_last_sync', REQUEST_TIME);
+  }
+}
+
+/**
+ * Helper function to set footer language from CIS.
+ */
+function cis_service_connection_get_footer_language() {
+  // request the standard footer language
+  $query = array('type' => 'resource', 'field_machine_name' => 'footer_language');
+  $response = _cis_connection_query($query);
+  // render text applying the input filter requested
+  $text = str_replace('!current', date('Y'), $response['list'][0]['body']['value']);
+  // load box object
+  $footer = boxes_box_load('site_footer');
+  if (isset($footer->options)) {
+    // set text as the body of the block/box
+    $footer->options['body']['value'] = $text;
+    // ensure correct format is in use
+    $footer->options['body']['format'] = $response['list'][0]['body']['format'];
+    // save
+    $footer->save();
+  }
+}
+
+/**
+ * Initial cron job to formally bind the CIS Service to the CIS.
+ */
+function _cis_service_connection_initial_cis_bind() {
+  // select the service instance in question based on uuid
+  $select = array(
+    'type' => 'service_instance',
+    'uuid' => variable_get('cis_service_instance_uuid', '')
+  );
+  // report back data based on hook being invoked
+  $data = module_invoke_all('set_cis_service_data', 'initial');
+  // set the data in the CIS
+  _cis_connection_set_data($select, $data);
+  // get the latest footer copy language
+  cis_service_connection_get_footer_language();
+  // set last sync time
+  variable_set('cis_service_connection_last_sync', REQUEST_TIME);
+}
+
+/**
+ * Implements hook_set_cis_service_data().
+ */
+function cis_service_connection_set_cis_service_data($delta) {
+  switch ($delta) {
+    case 'initial':
+      // only set cron key on the first time this runs against a service
+      $data = array(
+        'field_cron_key' => variable_get('cron_key', ''),
+      );
+    break;
+  }
+  return $data;
+}
