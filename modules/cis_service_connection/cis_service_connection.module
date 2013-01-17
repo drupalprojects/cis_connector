@@ -2,6 +2,68 @@
 define('CIS_SERVICE_CONNECTION_SYNC_FREQUENCY', 1);
 define('CIS_SERVICE_CONNECTION_HOMEPAGE', 'welcome_letter');
 /**
+ * Implements hook_init().
+ */
+function cis_service_connection_init() {
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cis_service_connection_block_info() {
+  $blocks = array(
+    'active_outline' => array(
+      'info' => t('Instructional Outline'),
+      'cache' => DRUPAL_CACHE_PER_USER,
+    ),
+    'instructor_contact' => array(
+      'info' => t('Instructor Contact info'),
+      'cache' => DRUPAL_CACHE_PER_USER,
+    ),
+    'section_context_changer' => array(
+      'info' => t('Change Section context'),
+      'cache' => DRUPAL_CACHE_PER_USER,
+    ), 
+  );
+  return $blocks;
+}
+/**
+ * Implements hook_block_view().
+ */
+function cis_service_connection_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'active_outline':
+      $block = cis_service_connection_block_section_outline();
+    break;
+    case 'instructor_contact':
+      $block['subject'] = t('Instructor Contact');
+      $block['content'] = cis_service_connection_block_instructor_contact();
+    break;
+    case 'section_context_changer':
+      if (user_access('switch section context')) {
+        $block['subject'] = '<none>';
+        $block['content'] = drupal_get_form('cis_service_connection_block_section_context_changer_form');
+      }
+    break;
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_permission().
+ *
+ * @return array
+ */
+function cis_service_connection_permission() {
+  return array(
+    'switch section context' => array(
+      'title' => t('Switch Section context'),
+      'description' => t('Allows user to utilize a block that switches the reported section context.'),
+    ),
+  );
+}
+/**
  * Implements hook_menu().
  */
 function cis_service_connection_menu() {
@@ -61,6 +123,14 @@ function cis_service_connection_menu() {
   // direct download of the syllabus, useful for remote referencing
   $items['syllabus/download'] = array(
     'title' => 'Syllabus',
+    'page callback' => '_cis_connector_transaction',
+    'page arguments' => array(0, 1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+  // redirect to the active instructional outline
+  $items['instructional_outline/redirect'] = array(
+    'title' => 'Instructional Outline',
     'page callback' => '_cis_connector_transaction',
     'page arguments' => array(0, 1),
     'type' => MENU_CALLBACK,
@@ -162,6 +232,10 @@ function _cis_service_connection_initial_cis_bind() {
   $data = module_invoke_all('set_cis_service_data', 'initial');
   // set the data in the CIS
   _cis_connection_set_data($select, $data);
+  // ask for the LTI request that will be recognized locally
+  if (module_exists('lti_tool_provider')) {
+    _cis_service_lti_get_consumer();
+  }
   // get the latest footer copy language
   cis_service_connection_get_footer_language();
   // set last sync time
@@ -181,4 +255,108 @@ function cis_service_connection_set_cis_service_data($delta) {
     break;
   }
   return $data;
+}
+
+/**
+ * Render a block based on section context
+ */
+function cis_service_connection_block_section_outline() {
+  $uuid = _cis_connector_transaction('instructional_outline');
+  // ensure that the section context defined an outline to use
+  if (isset($uuid)) {
+    // array cast as it expects multiple
+    $entities = entity_uuid_load('node', array($uuid));
+    // pop off our 1 book root node
+    $node = array_pop($entities);
+    $active = menu_get_object();
+    if (!isset($active->nid)) {
+      $active = $node;
+    }
+    // Only show the block if the user has view access for the top-level node.
+    if (entity_access('view', 'node', $active)) {
+      $tree = menu_tree_all_data($active->book['menu_name'], $active->book);
+      // There should only be one element at the top level.
+      $data = array_shift($tree);
+      $block['subject'] = $node->book['link_title'];
+      $block['content'] = menu_tree_output($data['below']);
+      return $block;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Callback for instructor contact block content.
+ */
+function cis_service_connection_block_instructor_contact() {
+  //pull contact info from cis
+  $info = _cis_connector_transaction('contact_info');
+  // ensure we have contact info to display
+  if (!empty($info)) {
+    // run listed input filter
+    return check_markup($info['value'], $info['format']);
+  }
+  return FALSE;
+}
+
+/**
+ * Callback to render a list of optional section contexts to cycle through
+ */
+function cis_service_connection_block_section_context_changer_form() {
+  // provide all sections of students in this course
+  $sections = cis_service_connection_all_section();
+  $form = array();
+  $form['section'] = array(
+    '#type' => 'select',
+    '#options' => $sections,
+    '#title' => t('Section to view'),
+    '#description' => t('Use this to view the course as a specific section would see it'),
+    '#default_value' => _cis_connector_section_context(),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Switch section'),
+  );
+  // check for section context override
+  if (isset($_SESSION['cis_section_context'])) {
+    $form['reset'] = array(
+      '#type' => 'submit',
+      '#value' => t('Reset'),
+    );
+  }
+  return $form;
+}
+
+/**
+ * Submit handler for the context changer block.
+ */
+function cis_service_connection_block_section_context_changer_form_submit($form, &$form_state) {
+  // set global state or unset the context switch
+  if ($form_state['input']['op'] == 'Reset') {
+    unset($_SESSION['cis_section_context']);
+  }
+  else {
+    $_SESSION['cis_section_context'] = $form_state['values']['section'];
+  }
+}
+
+/**
+ * Return all found profile2 sections as these are valid for switching
+ */
+function cis_service_connection_all_section() {
+  $sections = array();
+  // select field section data
+  $result = db_select('field_data_field_section', 'fdfs')
+  // return the section value
+  ->fields('fdfs', array('field_section_value'))
+  // only pull distinct values
+  ->distinct()
+  ->execute();
+  // convert to a readable array of options
+  foreach ($result as $val) {
+    $sections[$val->field_section_value] = $val->field_section_value;
+  }
+  // useful for custom college / university integrations
+  drupal_alter('cis_section_list', $sections);
+  return $sections;
 }
