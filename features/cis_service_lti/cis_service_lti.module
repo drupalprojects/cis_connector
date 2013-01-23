@@ -6,11 +6,11 @@
 
 include_once 'cis_service_lti.features.inc';
 /**
- * Implements hook_lti_tool_provider_launch_alter()
+ * Implements hook_lti_tool_provider_launch_alter().
  */
 function cis_service_lti_lti_tool_provider_launch_alter(&$launch_info, $account) {
   // load user by profile2 profile that's been sent
-  $profile = profile2_load_by_user($account, 'main');
+  $profile = profile2_load_by_user($account, CIS_PROFILE2_BUNDLE);
   // set the section to the incoming one
   $profile->field_section = array(LANGUAGE_NONE => array(0 => array('value' => $launch_info['context_id'])));
   // set creation source for record keeping as to what made the account
@@ -20,7 +20,7 @@ function cis_service_lti_lti_tool_provider_launch_alter(&$launch_info, $account)
 }
 
 /**
- * Recreate the lti consumer locally
+ * Recreate the lti consumer locally.
  */
 function _cis_service_lti_get_consumer() {
   // return the lti details for the associated service 

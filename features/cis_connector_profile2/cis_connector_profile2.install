@@ -1,0 +1,8 @@
+<?php
+/**
+ * Implements hook_install().
+ */
+function cis_connector_profile2_install() {
+  // revert fields to ensure they install correctly
+  features_revert(array('cis_connector_profile2' => array('field')));
+}

@@ -9,10 +9,14 @@ function cis_connector_init() {
  * Build the registry of educational connectors
  */
 function _cis_connector_build_registry($component = NULL) {
-  // invoke special hook for registry settings
-  $settings = module_invoke_all('cis_service_registry');
-  // follows best practice of drupal but only provided for future override potential
-  drupal_alter('cis_service_registry', $settings);
+  // statically cache future calls
+  $settings = &drupal_static(__FUNCTION__ . $component);
+  if (!isset($settings)) {
+    // invoke special hook for registry settings
+    $settings = module_invoke_all('cis_service_registry');
+    // follows best practice of drupal but only provided for future override potential
+    drupal_alter('cis_service_registry', $settings);
+  }
   if (!is_null($component)) {
     // validate that this component exists
     if (isset($settings[$component])) {
@@ -30,40 +34,38 @@ function _cis_connector_build_registry($component = NULL) {
 /**
  * Wrapper for structured calls against CIS system
  */
-function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL) {
+function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis') {
   // invoke special hook for registry settings
-  if ($settings = _cis_connector_build_registry('cis')) {
-    $address = _cis_connector_format_address($settings);
-    // options for method
-    $options = array('method' => $method);
-    // allow for PUT requests which require use of the data property
-    if (!empty($data)) {
-      $options['data'] = drupal_json_encode($data);
-      $options['headers'] = array('Content-Type' => 'application/json');
-    }
-    // build the call
-    $call = $address . '/' . $entity_type . '/' . $id;
-    if (!empty($format)) {
-      $call .= '.' . $format;
-    }
-    // generate the well structured request
-    $response = drupal_http_request($call, $options);
-    // parse format correctly for return if we can
-    switch ($format) {
-      case 'json':
-        $data = drupal_json_decode($response->data);
-      break;
-      case 'xml':
-        $data = simplexml_load_string($response->data);
-      break;
-      default:
-        $data = $response->data;
-      break;
-    }
+  // options for method
+  $options = array('method' => $method);
+  // allow for PUT requests which require use of the data property
+  if (!empty($data)) {
+    $options['data'] = drupal_json_encode($data);
+    $options['headers'] = array('Content-Type' => 'application/json');
   }
-  else {
-    drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
-    $data = FALSE;
+  // build the call
+  $call = $entity_type . '/' . $id;
+  if (!empty($format)) {
+    $call .= '.' . $format;
+  }
+  // generate the well structured request
+	if ($method == 'PUT') {
+    $response = _cis_connector_request($call, $options, $bucket, FALSE);
+	}
+	else {
+		$response = _cis_connector_request($call, $options);
+	}
+  // parse format correctly for return if we can
+  switch ($format) {
+    case 'json':
+      $data = drupal_json_decode($response->data);
+    break;
+    case 'xml':
+      $data = simplexml_load_string($response->data);
+    break;
+    default:
+      $data = $response->data;
+    break;
   }
   return $data;
 }
@@ -88,31 +90,24 @@ function _cis_connection_set_data($select, $data) {
  * Wrapper for structured queries against CIS system
  */
 function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET') {
-  // invoke special hook for registry settings
-  if ($settings = _cis_connector_build_registry('cis')) {
-    $address = _cis_connector_format_address($settings);
-    // options for method
-    $options = array('method' => $method);
-    // build the call
-    $call = $address . '/' . $entity_type . '.' . $format . '?' . http_build_query($query);
-    // generate the well structured request
-    $response = drupal_http_request($call, $options);
-    // parse format correctly for return if we can
-    switch ($format) {
-      case 'json':
-        $data = drupal_json_decode($response->data);
-      break;
-      case 'xml':
-        $data = simplexml_load_string($response->data);
-      break;
-      default:
-        $data = $response->data;
-      break;
-    }
-  }
-  else {
-    drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
-    $data = FALSE;
+  $data = FALSE;
+  // options for method
+  $options = array('method' => $method);
+  // build the call
+  $call = $entity_type . '.' . $format . '?' . http_build_query($query);
+  // generate the well structured request
+  $response = _cis_connector_request($call, $options);
+  // parse format correctly for return if we can
+  switch ($format) {
+    case 'json':
+      $data = drupal_json_decode($response->data);
+    break;
+    case 'xml':
+      $data = simplexml_load_string($response->data);
+    break;
+    default:
+      $data = $response->data;
+    break;
   }
   return $data;
 }
@@ -145,31 +140,31 @@ function _cis_connector_real_address($path) {
  * Returns the user's section context from their profile
  */
 function _cis_connector_section_context($account = NULL) {
-  //TODO: need to statically cache section context for this session
-  //$context = &drupal_static(__FUNCTION__, FALSE);
-  // check for global session override
-  if (isset($_SESSION['cis_section_context'])) {
-    return $_SESSION['cis_section_context'];
+  // statically cache future calls
+  $section = &drupal_static(__FUNCTION__);
+  if (!isset($section)) {
+    // check for global session override
+    if (isset($_SESSION['cis_section_context'])) {
+      return $_SESSION['cis_section_context'];
+    }
+    // use current user if acount is not set
+    if (empty($account)) {
+      global $user;
+      $account = $user;
+    }
+    // load user by profile2 profile that's been set
+    $profile = profile2_load_by_user($account, CIS_PROFILE2_BUNDLE);
+    // ensure profile is set
+    if (isset($profile->field_section) && is_array($profile->field_section[LANGUAGE_NONE])) {
+      // pull out the section value if available
+      $section = $profile->field_section[LANGUAGE_NONE][0]['safe_value'];
+    }
+    else {
+      // TODO: should probably have better handling as to what the default is
+      // essentially if you have no profile section this is an error when running this
+      $section = 'default';
+    }
   }
-  // use current user if acount is not set
-  if (empty($account)) {
-    global $user;
-    $account = $user;
-  }
-  // load user by profile2 profile that's been set
-  //TODO: references to 'main' should be a defined global
-  $profile = profile2_load_by_user($account, 'main');
-  // ensure profile is set
-  if (isset($profile->field_section) && is_array($profile->field_section[LANGUAGE_NONE])) {
-    // pull out the section value if available
-    $section = $profile->field_section[LANGUAGE_NONE][0]['safe_value'];
-  }
-  else {
-    // TODO: should probably have better handling as to what the default is
-    // essentially if you have no profile section this is an error when running this
-    $section = 'default';
-  }
-  // return section in question
   return $section;
 }
 
@@ -296,7 +291,8 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           // return the file as a download
           if ($format == 'download') {
             // return the file via direct http call
-            $file_contents = drupal_http_request($file['url']);
+            $options = array();
+            $file_contents = _cis_connector_request($file['url'], $options, 'none', FALSE);
             // set the content type to the file returned info
             drupal_add_http_header('Content-type', $file['mime']);
             // set the filename to the file returned info
@@ -328,4 +324,96 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
     break;
   }
   return $output;
+}
+
+/**
+ * Wrapper for drupal_http_request to enable cached requests
+ */  
+function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cached = TRUE) {
+  $data = FALSE;
+  // trick to mash request into a single item
+  $args = func_get_args();
+  // options can be an array so need to implode on its own
+	if (is_array($args[1])) {
+    $args[1] = implode('_', $args[1]);
+	}
+  // append bucket type in case default is utilized
+  if (!isset($args[2])) {
+    $args[2] = $bucket;
+  }
+  // generate a unique call signature
+  $call = __FUNCTION__ . implode('_', $args);
+  // statically cache future calls
+  $data = &drupal_static($call);
+  if (!isset($data)) {
+    // convert to something db friendly
+    $salt = drupal_get_hash_salt();
+    $cid = hash('sha512', $salt . $call);
+    if ($cached && ($cache = cache_get($cid, 'cache_cis_connector'))) {
+      $data = $cache->data;      
+    }
+    else {
+      // allow for direct http requests
+      if ($bucket == 'none') {
+        $data = drupal_http_request($url, $options);
+      }
+      // look for settings for this bucket
+      else if ($settings = _cis_connector_build_registry($bucket)) {
+        $address = _cis_connector_format_address($settings);
+        // url passed in has everything for the request minus http location
+        $data = drupal_http_request($address . '/' . $url, $options);
+      }
+      else {
+        drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
+      }
+      cache_set($cid, $data, 'cache_cis_connector');
+    }
+  }
+  return $data;
+}
+
+/**
+ * Invalidates cached data relating to cis_connector.
+ *
+ * @param $cid
+ *   (optional) Cache ID of the record to clear from the private update module
+ *   cache. If empty, all records will be cleared from the table except fetch
+ *   tasks. Defaults to NULL.
+ * @param $wildcard
+ *   (optional) If TRUE, cache IDs starting with $cid are deleted in addition to
+ *   the exact cache ID specified by $cid. Defaults to FALSE.
+ */
+function _cis_connector_cache_clear($cid = NULL, $wildcard = FALSE) {
+  if (empty($cid)) {
+    db_delete('cache_cis_connector')->execute();
+  }
+  else {
+    $query = db_delete('cache_cis_connector');
+    if ($wildcard) {
+      $query->condition('cid', $cid . '%', 'LIKE');
+    }
+    else {
+      $query->condition('cid', $cid);
+    }
+    $query->execute();
+  }
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function cis_connector_flush_caches() {
+  _cis_connector_cache_clear();
+  return array();
+}
+
+/**
+ * Implements hook_admin_menu_cache_info().
+ */
+function cis_connector_admin_menu_cache_info() {
+  $caches['cis_connector'] = array(
+    'title' => t('CIS Data'),
+    'callback' => '_cis_connector_cache_clear',
+  );
+  return $caches;
 }

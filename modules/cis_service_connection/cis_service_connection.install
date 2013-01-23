@@ -16,7 +16,7 @@ function cis_service_connection_install() {
  */
 function cis_service_connection_uninstall() {
   // unset the front page if its the welcome-letter
-  if (variable_get('site_frontpage', CIS_SERVICE_CONNECTION_HOMEPAGE) == CIS_SERVICE_CONNECTION_HOMEPAGE) {
+  if (variable_get('site_frontpage', 'welcome_letter') == 'welcome_letter') {
     variable_set('site_frontpage', 'node');
   }
 }
