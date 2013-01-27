@@ -49,12 +49,12 @@ function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $m
     $call .= '.' . $format;
   }
   // generate the well structured request
-	if ($method == 'PUT') {
+  if ($method == 'PUT') {
     $response = _cis_connector_request($call, $options, $bucket, FALSE);
-	}
-	else {
-		$response = _cis_connector_request($call, $options);
-	}
+  }
+  else {
+    $response = _cis_connector_request($call, $options);
+  }
   // parse format correctly for return if we can
   switch ($format) {
     case 'json':
@@ -180,6 +180,14 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
   $base_query = array('field_access_string' => $section, 'archived' => 0);
   // process request
   switch ($request) {
+    case 'section':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // return the whole section array
+      $output = $cis_section_item['list'][0];
+    break;
     case 'instructional_outline':
       // query access string based on section context
       $query = $base_query;
@@ -334,9 +342,9 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
   // trick to mash request into a single item
   $args = func_get_args();
   // options can be an array so need to implode on its own
-	if (is_array($args[1])) {
+  if (is_array($args[1])) {
     $args[1] = implode('_', $args[1]);
-	}
+  }
   // append bucket type in case default is utilized
   if (!isset($args[2])) {
     $args[2] = $bucket;
