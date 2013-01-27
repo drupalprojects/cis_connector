@@ -222,8 +222,8 @@ function cis_service_connection_cron() {
     _cis_connection_set_data($select, $data);
     variable_set('cis_service_connection_last_sync', REQUEST_TIME);
   }
-	// clear cached versions of section queries regardless of condition
-	_cis_connector_cache_clear();
+  // clear cached versions of section queries regardless of condition
+  _cis_connector_cache_clear();
 }
 
 /**
@@ -251,6 +251,28 @@ function cis_service_connection_get_footer_language() {
  * Initial cron job to formally bind the CIS Service to the CIS.
  */
 function _cis_service_connection_initial_cis_bind() {
+  // this allows for targetting the 1 section for this new course
+  $query = array('field_instructional_outline' => variable_get('cis_service_instance_uuid', ''), 'archived' => 0);
+  
+  // return 1 section item based on this uuid in id outline
+  $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+  // return the whole section array
+  $default_section = $cis_section_item['list'][0]['field_access_string'];
+  $result = db_select('users', 'u')
+  ->fields('u', array('uid'))
+  ->condition('uid', '0', '<>')
+  ->execute();
+  $uids = array();
+  foreach($result as $record) {
+    $uids[] = $record->uid;
+  }
+  foreach ($uids as $uid) {
+    // create associated profile2 profile per user
+    $profile = profile2_create(array('type' => CIS_PROFILE2_BUNDLE, 'uid' => $uid));
+    // set section info, this is just for default
+    $profile->field_section[LANGUAGE_NONE][0]['value'] = $default_section;
+    profile2_save($profile);
+  }
   // select the service instance in question based on uuid
   $select = array(
     'type' => 'service_instance',
@@ -310,7 +332,7 @@ function cis_service_connection_block_section_outline() {
           $tree = menu_tree_all_data($active->book['menu_name'], $active->book);
           // There should only be one element at the top level.
           $data = array_shift($tree);
-          $block['subject'] = $node->book['link_title'];
+          $block['subject'] = '<none>';
           $block['content'] = menu_tree_output($data['below']);
           return $block;
         }
