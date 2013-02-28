@@ -18,15 +18,18 @@ function cis_service_connection_thumbnav_widget() {
       'inc' => drupal_get_path('module', 'cis_service_connection') . '/js/cis_service_connection_inst_contact.js',
       'weight' => 1,
       'side' => 'right',
-    ),
-    'cis_service_connection_section_context' => array(
+    )
+	);
+	// verify they can switch context
+	if (user_access('switch section context')) {
+    $widgets['cis_service_connection_section_context'] = array(
       'icon' => base_path() . drupal_get_path('module', 'cis_service_connection') . '/images/section_context.png',
       'title' => t('Section change'),
       'inc' => drupal_get_path('module', 'cis_service_connection') . '/js/cis_service_connection_section_context.js',
       'weight' => 6,
       'side' => 'right',
-    ),
-  );
+    );
+	}
   return $widgets;
 }
 

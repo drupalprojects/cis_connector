@@ -15,8 +15,7 @@ function cis_connector_profile2_default_profile2_type() {
     "type" : "main",
     "label" : "Main profile",
     "weight" : "0",
-    "data" : { "registration" : true, "use_page" : true },
-    "rdf_mapping" : []
+    "data" : { "registration" : true, "use_page" : true }
   }');
   return $items;
 }
