@@ -41,7 +41,7 @@ function cis_service_connection_ux_context_default_contexts() {
         'cis_service_connection-section_context_changer' => array(
           'module' => 'cis_service_connection',
           'delta' => 'section_context_changer',
-          'region' => 'sidebar_first',
+          'region' => 'regions_admin_left',
           'weight' => '-7',
         ),
       ),

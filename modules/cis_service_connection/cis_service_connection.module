@@ -20,16 +20,6 @@ function cis_service_connection_thumbnav_widget() {
       'side' => 'right',
     )
 	);
-	// verify they can switch context
-	if (user_access('switch section context')) {
-    $widgets['cis_service_connection_section_context'] = array(
-      'icon' => base_path() . drupal_get_path('module', 'cis_service_connection') . '/images/section_context.png',
-      'title' => t('Section change'),
-      'inc' => drupal_get_path('module', 'cis_service_connection') . '/js/cis_service_connection_section_context.js',
-      'weight' => 6,
-      'side' => 'right',
-    );
-	}
   return $widgets;
 }
 
@@ -68,7 +58,7 @@ function cis_service_connection_block_view($delta = '') {
     break;
     case 'section_context_changer':
       if (user_access('switch section context')) {
-        $block['subject'] = '<none>';
+        $block['subject'] = t('Section change');
         $block['content'] = drupal_get_form('cis_service_connection_block_section_context_changer_form');
       }
     break;
