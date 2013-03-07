@@ -1,0 +1,20 @@
+/* CSS Document */
+#regions_admin_left #block-menu-menu-cis-toolkit h2{
+  color: #111;
+  font-size: 2.3em;
+  overflow: hidden;
+  padding: 0px;
+  margin: 20px 0px 0px 0px;
+  background-color: #eee;
+  text-transform:uppercase;
+}
+
+#regions_admin_left #block-cis-service-connection-section-context-changer h2{
+  color: #111;
+  font-size: 2.3em;
+  overflow: hidden;
+  padding: 0px;
+  margin: 20px 0px 0px 0px;
+  background-color: #eee;
+  text-transform:uppercase;
+}

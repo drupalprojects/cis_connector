@@ -5,3 +5,10 @@
  */
 
 include_once 'cis_service_connection_ux.features.inc';
+
+/**
+ * Implements hook_init().
+ */
+function cis_service_connection_ux_init() {
+	drupal_add_css(drupal_get_path('module', 'cis_service_connection_ux') . '/cis_service_connection_ux.css');
+}
