@@ -19,7 +19,7 @@ function cis_service_connection_thumbnav_widget() {
       'weight' => 1,
       'side' => 'right',
     )
-	);
+  );
   return $widgets;
 }
 
@@ -172,7 +172,7 @@ function _cis_service_connection_page($request) {
       // first thing student sees is instructor contact info
       $info = _cis_connector_transaction('contact_info');
       // render text applying the input filter requested
-      if (isset($info['value'])) {    
+      if (isset($info['value'])) {
         $suffix .= '<h2>' . t('Instructor Contact') . '</h2>' . $info['value'];
       }
     break;
@@ -363,7 +363,6 @@ function cis_service_connection_block_section_context_changer_form() {
     '#type' => 'select',
     '#options' => $sections,
     '#title' => t('Section to view'),
-    '#description' => t('Use this to view the course as a specific section would see it'),
     '#default_value' => _cis_connector_section_context(),
   );
   $form['submit'] = array(
