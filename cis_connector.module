@@ -1,16 +1,13 @@
 <?php
-/**
- * Implements hook_init().
- */
-function cis_connector_init() {
-  // stub just so that drupal bootstraps this library
-}
+// set this to true in order to debug better
+define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
+
 /**
  * Build the registry of educational connectors
  */
 function _cis_connector_build_registry($component = NULL) {
   // statically cache future calls
-  $settings = &drupal_static(__FUNCTION__ . $component);
+    $settings = &drupal_static(__FUNCTION__ . $component);
   if (!isset($settings)) {
     // invoke special hook for registry settings
     $settings = module_invoke_all('cis_service_registry');
@@ -208,6 +205,28 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // return an array with input format and textual content of contact info
       $output = $cis_section_item['list'][0]['field_contact_info'];
     break;
+    case 'other_services':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // return the whole section array
+      $section_object = $cis_section_item['list'][0];
+      // check for services defined
+      if (isset($section_object['field_services']) && is_array($section_object['field_services'])) {
+        // walk each service requesting details
+        foreach ($section_object['field_services'] as $key => $service_field) {
+          $query = array(
+            'status' => 1,
+              'nid' => $service_field['id'],
+          );
+          // query the service object
+          $service_object = _cis_connection_query($query, $service_field['resource']);
+          // hold onto the objects
+          $output[$key] = $service_object['list'][0];    
+        }
+      }
+    break;
     case 'help':
     case 'resources':
       // query access string based on section context
@@ -218,6 +237,17 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       if (!empty($cis_section_item)) {
         $list = '';
         if ($request == 'resources') {
+          // display related services prior to other resources
+          $services = _cis_connector_transaction('other_services');
+          // make sure this is actually using other services
+          if (is_array($services)) {
+             // render each service return item
+             foreach ($services as $service) {
+               $list .= '<h2>' . $service['title'] . '</h2>' . "\n";
+               $list .= '<div>' . $service['body']['value'] . "\n";
+               $list .= l(t('Access the @title service', array('@title' => $service['title'])), $service['field_location']['url'] . base_path()) . '</div>' . "\n";
+             }
+          }
           // loop through resources associated to build their info
           foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
             $resource = _cis_connection_object($reid['id'], $reid['resource']);
@@ -339,6 +369,10 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
  */  
 function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cached = TRUE) {
   $data = FALSE;
+  // developers: allow for debug of all calls with fresh values
+  if (CIS_CONNECTOR_DEVELOPMENT) {
+    $cached = FALSE;
+  }
   // trick to mash request into a single item
   $args = func_get_args();
   // options can be an array so need to implode on its own
@@ -358,7 +392,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
     $salt = drupal_get_hash_salt();
     $cid = hash('sha512', $salt . $call);
     if ($cached && ($cache = cache_get($cid, 'cache_cis_connector'))) {
-      $data = $cache->data;      
+      $data = $cache->data; 
     }
     else {
       // allow for direct http requests
