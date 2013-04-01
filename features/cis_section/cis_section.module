@@ -1,0 +1,14 @@
+<?php
+/**
+ * @file
+ * Code for the CIS Section feature.
+ */
+
+include_once 'cis_section.features.inc';
+
+/**
+ * Implements hook_page_build().
+ */
+function cis_section_page_build(&$page) {
+  drupal_add_css(drupal_get_path('module', 'cis_section') . '/cis_section.css');
+}
