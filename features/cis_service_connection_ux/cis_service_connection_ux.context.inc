@@ -26,41 +26,11 @@ function cis_service_connection_ux_context_default_contexts() {
   $context->reactions = array(
     'block' => array(
       'blocks' => array(
-        'cis_service_connection-active_outline' => array(
-          'module' => 'cis_service_connection',
-          'delta' => 'active_outline',
-          'region' => 'sidebar_first',
-          'weight' => '-10',
-        ),
-        'cis_service_connection-instructor_contact' => array(
-          'module' => 'cis_service_connection',
-          'delta' => 'instructor_contact',
-          'region' => 'sidebar_first',
-          'weight' => '-9',
-        ),
         'menu-menu-cis-toolkit' => array(
           'module' => 'menu',
           'delta' => 'menu-cis-toolkit',
           'region' => 'regions_admin_left',
-          'weight' => '-10',
-        ),
-        'delta_blocks-tabs' => array(
-          'module' => 'delta_blocks',
-          'delta' => 'tabs',
-          'region' => 'regions_admin_left',
-          'weight' => '-9',
-        ),
-        'cis_service_connection-section_context_changer' => array(
-          'module' => 'cis_service_connection',
-          'delta' => 'section_context_changer',
-          'region' => 'regions_admin_left',
-          'weight' => '-8',
-        ),
-        'masquerade-masquerade' => array(
-          'module' => 'masquerade',
-          'delta' => 'masquerade',
-          'region' => 'regions_admin_left',
-          'weight' => '-7',
+          'weight' => '-21',
         ),
       ),
     ),

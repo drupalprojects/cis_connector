@@ -8,8 +8,8 @@
       }
       Drupal.thumbnav.modal(title, text);
     });
-		if ($('#block-cis-service-connection-instructor-contact').length == 0) {
-			$('.cis_service_connection_inst_contact').css('display', 'none');
-		}
+    if ($('#block-cis-service-connection-instructor-contact').length == 0) {
+      $('.cis_service_connection_inst_contact').css('display', 'none');
+    }
   });
 })(jQuery);
