@@ -249,23 +249,6 @@ function _cis_service_connection_initial_cis_bind() {
   
   // return 1 section item based on this uuid in id outline
   $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-  // return the whole section array
-  $default_section = $cis_section_item['list'][0]['field_access_string'];
-  $result = db_select('users', 'u')
-  ->fields('u', array('uid'))
-  ->condition('uid', '0', '<>')
-  ->execute();
-  $uids = array();
-  foreach($result as $record) {
-    $uids[] = $record->uid;
-  }
-  foreach ($uids as $uid) {
-    // create associated profile2 profile per user
-    $profile = profile2_create(array('type' => CIS_PROFILE2_BUNDLE, 'uid' => $uid));
-    // set section info, this is just for default
-    $profile->field_section[LANGUAGE_NONE][0]['value'] = $default_section;
-    profile2_save($profile);
-  }
   // select the service instance in question based on uuid
   $select = array(
     'type' => 'service_instance',
@@ -309,16 +292,14 @@ function cis_service_connection_block_section_outline() {
   if (!isset($block)) {
     // never load when on an edit form in case it gets called
     if (arg(2) != 'edit') {
-      // attempt to grab user's group list
-      $groups = og_get_entity_groups();
-      if (!empty($groups['node'])) {
-        $group = node_load($groups['node'][1]);
-      }
-      // test that an outline is set
-      if (isset($group->field_instructional_outlines['und'])) {
+      $group = cis_service_connection_load_group();
+      // test that an outline is set for a group
+      if (isset($group->nid) && isset($group->field_instructional_outlines['und'])) {
         $node = node_load($group->field_instructional_outlines['und'][0]['target_id']);
+        // load the active outline
         $active = menu_get_object();
-        if (!isset($active->book)) {
+        // test for not being on a node as well as global setting overriding outline to use
+        if (!isset($active->book) || ($active->book['menu_name'] != $node->book['menu_name'])) {
           $active = $node;
         }
         // only show the block if the user has view access for the top-level node.
@@ -394,22 +375,65 @@ function cis_service_connection_block_section_context_changer_form_submit($form,
 }
 
 /**
- * Return all found profile2 sections as these are valid for switching
+ * Return all found sections as these are valid for switching
+ * This is essentially a list of the current user's groups
  */
 function cis_service_connection_all_section() {
   $sections = array();
   // select field section data
-  $result = db_select('field_data_field_section', 'fdfs')
-  // return the section value
-  ->fields('fdfs', array('field_section_value'))
-  // only pull distinct values
-  ->distinct()
-  ->execute();
-  // convert to a readable array of options
-  foreach ($result as $val) {
-    $sections[$val->field_section_value] = $val->field_section_value;
+  $query = new EntityFieldQuery();
+  // pull all nodes
+  $query->entityCondition('entity_type', 'node')
+  // that are sections
+  ->entityCondition('bundle', 'section')
+  // that are published
+  ->propertyCondition('status', 1);
+  // store results
+  $result = $query->execute();
+  // ensure we have results
+  if (isset($result['node'])) {
+    $nids = array_keys($result['node']);
+    $results = entity_load('node', $nids);
+    // convert to a readable array of options
+    foreach ($results as $val) {
+      $section = $val->field_section_id['und'][0]['safe_value'];
+      $sections[$section] = $section;
+    }
+    // useful for custom college / university integrations
+    drupal_alter('cis_section_list', $sections);
   }
-  // useful for custom college / university integrations
-  drupal_alter('cis_section_list', $sections);
   return $sections;
+}
+
+/**
+ * Return a group node when passed a section
+ */
+function cis_service_connection_load_group($section = NULL) {
+  // allow for loading of current context
+  if (empty($section)) {
+    $section = _cis_connector_section_context();
+  }
+  // select field section data
+  $query = new EntityFieldQuery();
+  // pull all nodes
+  $query->entityCondition('entity_type', 'node')
+  // that are sections
+  ->entityCondition('bundle', 'section')
+  // that are published
+  ->propertyCondition('status', 1)
+  // that have the passed section
+  ->fieldCondition('field_section_id', 'value', $section, '=')
+  ->addMetaData('account', user_load(1));
+  // store results
+  $result = $query->execute();
+  // ensure we have results
+  if (isset($result['node'])) {
+    $nids = array_keys($result['node']);
+    $sections = entity_load('node', $nids);
+    // convert to a readable array of options
+    foreach ($sections as $section) {
+      return $section;
+    }
+  }
+  return NULL;
 }

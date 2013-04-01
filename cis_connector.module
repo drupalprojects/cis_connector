@@ -134,7 +134,7 @@ function _cis_connector_real_address($path) {
 }
 
 /**
- * Returns the user's section context from their profile
+ * Returns the user's section context from their group / global
  */
 function _cis_connector_section_context($account = NULL) {
   // statically cache future calls
@@ -149,16 +149,26 @@ function _cis_connector_section_context($account = NULL) {
       global $user;
       $account = $user;
     }
-    // load user by profile2 profile that's been set
-    $profile = profile2_load_by_user($account, CIS_PROFILE2_BUNDLE);
-    // ensure profile is set
-    if (isset($profile->field_section) && is_array($profile->field_section[LANGUAGE_NONE])) {
+    // attempt to grab og context, rare case but possible
+    $group = og_context();
+    if (isset($group['gid'])) {
+      $group = node_load($group['gid']);
+    }
+    else {
+      // load groups they are part of
+      $groups = og_get_entity_groups('user', $account);
+      if (!empty($groups['node'])) {
+        $group = node_load($groups['node'][1]);
+      }
+    }
+    // ensure section is set
+    if (isset($group->field_section_id) && is_array($group->field_section_id[LANGUAGE_NONE])) {
       // pull out the section value if available
-      $section = $profile->field_section[LANGUAGE_NONE][0]['safe_value'];
+      $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
     }
     else {
       // TODO: should probably have better handling as to what the default is
-      // essentially if you have no profile section this is an error when running this
+      // essentially group / section this is an error when running this
       $section = 'default';
     }
   }
