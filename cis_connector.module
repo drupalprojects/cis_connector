@@ -1,5 +1,6 @@
 <?php
-// set this to true in order to debug better
+// this is a kill switch to force all calls to be uncached
+// trigger this when testing and debugging calls
 define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
 
 /**
@@ -31,7 +32,7 @@ function _cis_connector_build_registry($component = NULL) {
 /**
  * Wrapper for structured calls against CIS system
  */
-function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis') {
+function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis', $instance = '') {
   // invoke special hook for registry settings
   // options for method
   $options = array('method' => $method);
@@ -41,7 +42,7 @@ function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $m
     $options['headers'] = array('Content-Type' => 'application/json');
   }
   // build the call
-  $call = $entity_type . '/' . $id;
+  $call = $instance . $entity_type . '/' . $id;
   if (!empty($format)) {
     $call .= '.' . $format;
   }
@@ -84,16 +85,30 @@ function _cis_connection_set_data($select, $data) {
 }
 
 /**
+ * Wrapper for structured queries against matching CIS services
+ */
+function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 'node', $query = array(), $cached = TRUE) {
+  // abstract a related sub-service, this will just remove the / if base-path is root
+  $path = substr(base_path(), 1);
+  $result = _cis_connection_query($query, $entity_type, 'json', 'GET', $bucket, $path, $cached);
+  // return items if any were found
+  if (isset($result['list'])) {
+    return $result['list'];
+  }
+  return NULL;
+}
+
+/**
  * Wrapper for structured queries against CIS system
  */
-function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET') {
+function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET', $bucket = 'cis', $instance = '', $cached = TRUE) {
   $data = FALSE;
   // options for method
   $options = array('method' => $method);
   // build the call
-  $call = $entity_type . '.' . $format . '?' . http_build_query($query);
+  $call = $instance . $entity_type . '.' . $format . '?' . http_build_query($query);
   // generate the well structured request
-  $response = _cis_connector_request($call, $options);
+  $response = _cis_connector_request($call, $options, $bucket, $cached);
   // parse format correctly for return if we can
   switch ($format) {
     case 'json':
@@ -111,7 +126,7 @@ function _cis_connection_query($query = array(), $entity_type = 'node', $format 
 /**
  * Return a well formed address based on certain values.
  */
-function _cis_connector_format_address($settings) {
+function _cis_connector_format_address($settings, $instance = '') {
   // start with protocol
   $address = $settings['protocol'] . '://';
   // optional HTTP authenticated request, required in any *real* environment
@@ -119,7 +134,7 @@ function _cis_connector_format_address($settings) {
     $address .= $settings['user'] . ':' . $settings['pass'] . '@';
   }
   // append the connection address
-  $address .= $settings['service_address'];
+  $address .= $settings['service_address'] . $instance;
   return $address;
 }
 
@@ -421,7 +436,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
       cache_set($cid, $data, 'cache_cis_connector');
     }
   }
-  return $data;
+  return $data;  
 }
 
 /**
@@ -468,4 +483,14 @@ function cis_connector_admin_menu_cache_info() {
     'callback' => '_cis_connector_cache_clear',
   );
   return $caches;
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function cis_connector_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'cis_connector'),
+  );
 }
