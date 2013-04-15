@@ -3,17 +3,22 @@
  * Implements hook_views_post_build().
  */
 function cis_connector_views_post_build(&$view) {
-  // need to modify results based on those found in page
-  if (isset($view->query->options['cis_bucket']) && $view->query->options['cis_bucket'] != '' && isset($view->query->options['xml_file'])) {
+  // only enable this for views XML backend calls
+  if (
+    $view->base_table == 'xml' && 
+		// ensure the cis bucket is set and not empty
+    isset($view->query->options['cis_bucket']) && 
+    $view->query->options['cis_bucket'] != '' && 
+		// make sure the registry bucket exists
+    $settings = _cis_connector_build_registry($view->query->options['cis_bucket'])
+  ) {
     // make sure the call is to the correct xml data source
-    if ($settings = _cis_connector_build_registry($view->query->options['cis_bucket'])) {
-      $path = '/';
-      if ($view->query->options['cis_instance']) {
-        $path = base_path();
-      }
-      $address = _cis_connector_format_address($settings, $path);
-      $view->query->options['xml_file'] = $address . $view->query->options['xml_file'];
+    $path = '/';
+    if ($view->query->options['cis_instance']) {
+      $path = base_path();
     }
+    $address = _cis_connector_format_address($settings, $path);
+    $view->query->options['xml_file'] = $address . $view->query->options['xml_file'];
   }
 }
 

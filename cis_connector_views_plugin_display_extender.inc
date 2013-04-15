@@ -75,20 +75,24 @@ class cis_connector_views_plugin_display_extender extends views_plugin_display_e
    * This output is returned as an array.
    */
   function options_summary(&$categories, &$options) {
-    $bucket = check_plain(trim($this->display->get_option('cis_bucket')));
-    $options['cis_connector'] = array(
-      'category' => 'other',
-      'title' => t('CIS Connector'),
-      'value' => $bucket,
-      'desc' => t('CIS Connector settings to modify request address dynamically.'),
-    );
+    if ($this->view->base_table == 'xml') {
+      $bucket = check_plain(trim($this->display->get_option('cis_bucket')));
+      $options['cis_connector'] = array(
+        'category' => 'other',
+        'title' => t('CIS Connector'),
+        'value' => $bucket,
+        'desc' => t('CIS Connector settings to modify request address dynamically.'),
+      );
+    }
   }
   /**
    * Inject anything into the query that the display_extender handler needs.
    */
   function query() {
-    $options = $this->view->display_handler->options;
-    $this->view->query->options['cis_bucket'] = $options['cis_bucket'];
-    $this->view->query->options['cis_instance'] = $options['cis_instance'];
+    if ($this->view->base_table == 'xml') {
+      $options = $this->view->display_handler->options;
+      $this->view->query->options['cis_bucket'] = $options['cis_bucket'];
+      $this->view->query->options['cis_instance'] = $options['cis_instance'];
+    }
   }
 }
