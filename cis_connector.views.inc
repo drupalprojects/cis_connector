@@ -6,10 +6,10 @@ function cis_connector_views_post_build(&$view) {
   // only enable this for views XML backend calls
   if (
     $view->base_table == 'xml' && 
-		// ensure the cis bucket is set and not empty
+    // ensure the cis bucket is set and not empty
     isset($view->query->options['cis_bucket']) && 
     $view->query->options['cis_bucket'] != '' && 
-		// make sure the registry bucket exists
+    // make sure the registry bucket exists
     $settings = _cis_connector_build_registry($view->query->options['cis_bucket'])
   ) {
     // make sure the call is to the correct xml data source

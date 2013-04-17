@@ -19,6 +19,7 @@ function hook_cis_service_registry() {
       'address' => 'www.example.com', // address to connect to for CIS data
       'user' => 'account', // special user account with HTTP authentication access
       'pass' => 'password', // password for that connection account
+      'mail' => 'account@example.com', // optional email address for associated account connection
       'college_machine' => 'aanda', // machine name for the college in question
     ),
   );
