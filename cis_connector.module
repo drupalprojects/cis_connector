@@ -173,7 +173,7 @@ function _cis_connector_section_context($account = NULL) {
       // load groups they are part of
       $groups = og_get_entity_groups('user', $account);
       if (!empty($groups['node'])) {
-        $group = node_load($groups['node'][1]);
+        $group = node_load(array_pop($groups['node']));
       }
     }
     // ensure section is set
@@ -193,11 +193,13 @@ function _cis_connector_section_context($account = NULL) {
 /**
  * Callback to return structured data
  */
-function _cis_connector_transaction($request, $format = 'default', $query = array()) {
+function _cis_connector_transaction($request, $format = 'default', $query = array(), $section = NULL) {
   // return false if we don't match a request
   $output = FALSE;
   // grab section context of the user
-  $section = _cis_connector_section_context();
+  if (is_null($section)) {
+    $section = _cis_connector_section_context();
+  }
   // form the commonly used base query
   $base_query = array('field_access_string' => $section, 'archived' => 0);
   // process request
@@ -291,8 +293,8 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
     break;
     case 'section_dates':
       $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      // request the section of the user, always uncached
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item', 'json', 'GET', 'cis', '', FALSE);
       // pull back access duration
       $dates = $cis_section_item['list'][0]['field_access_dates'];
       // pull back the date class officially begins
