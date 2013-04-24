@@ -4,8 +4,7 @@ define('CIS_SERVICE_CONNECTION_HOMEPAGE', 'welcome_letter');
 /**
  * Implements hook_init().
  */
-function cis_service_connection_init() {
-}
+function cis_service_connection_init() {}
 
 /**
  * Implements hook_thumbnav_widget().
@@ -160,12 +159,7 @@ function cis_service_connection_menu() {
  */
 function _cis_service_connection_page($request) {
   $output = '';
-  if (module_exists('tableofcontents')) {
-    $suffix = '[toc]';
-  }
-  else {
-    $suffix = '';
-  }
+  $suffix = '';
   // allow for per option processing
   switch ($request) {
     case 'help':
@@ -183,10 +177,6 @@ function _cis_service_connection_page($request) {
     $body['value'] = $suffix . $body['value'];
     // check the markup of the format
     $output .= check_markup($body['value'], $body['format']);
-    // only process if enabled
-    if (module_exists('tableofcontents')) {
-      _tableofcontents_process_text($output);
-    }
   }
   return $output;
 }
@@ -211,8 +201,12 @@ function cis_service_connection_cron() {
       'uuid' => variable_get('cis_service_instance_uuid', '')
     );
     $data = module_invoke_all('set_cis_service_data', 'interval');
-    // set the data in the CIS
-    _cis_connection_set_data($select, $data);
+    // set the data in the CIS if we have any
+    if (!empty($data)) {
+      _cis_connection_set_data($select, $data);
+    }
+    // ensure users that should be here still are
+    _cis_service_connection_access_control();
     variable_set('cis_service_connection_last_sync', REQUEST_TIME);
   }
   // clear cached versions of section queries regardless of condition
@@ -436,4 +430,67 @@ function cis_service_connection_load_group($section = NULL) {
     }
   }
   return NULL;
+}
+
+/**
+ * Handle Role expiration.
+ *
+ * Accept a section name and look up an associated organic group.
+ * Read in the group's user list and set all student roles to past student
+ */
+function _cis_service_connection_expire_roles($section) {
+  // full group node for this section
+  $group = cis_service_connection_load_group($section);
+  // Get a list of all the users in the group
+  $students = _cis_service_connection_get_users_in_group($group->nid);
+  // add past_student role
+  $role = user_role_load_by_name('past student');
+  user_multiple_role_edit($students, 'add_role', $role->rid);
+  // drop student role
+  $role = user_role_load_by_name('student');
+  user_multiple_role_edit($students, 'remove_role', $role->rid);
+}
+
+/**
+ * Get all students of a group.
+ */
+function _cis_service_connection_get_users_in_group($gid) {
+  // load full student role object by name
+  $role = user_role_load_by_name('student');
+  // return membership to this group that are students
+  $query = db_select('og_membership', 'ogm'); 
+  // join user roles and memberships
+  $query->join('users_roles', 'ur', 'ur.uid = ogm.etid');
+  // only this group
+  $query->condition('ogm.gid', $gid, '=');
+  // ensure it's a user type of entity
+  $query->condition('ogm.entity_type', 'user', '=');
+  // only grab people who are students
+  $query->condition('ur.rid', $role->rid, '=');
+  // return the entity id which is the user's id
+  $query->fields('ogm', array('etid'));
+  // execute
+  $result = $query->execute();
+  $records = $result->fetchAll();
+  $uids = array();
+  // convert to an array of uids
+  foreach ($records as $record) {
+    $uids[] = $record->etid;
+  }
+  return $uids;
+}
+
+/**
+ * Test if each section's users should still have student access rights.
+ */
+function _cis_service_connection_access_control() {
+  // test all sections based on their dates
+  $sections = array_keys(cis_service_connection_all_section());
+  foreach ($sections as $section) {
+    $dates = _cis_connector_transaction('section_dates', 'default', array(), $section);
+    // only perform this if we have an end date stored
+    if (isset($dates['end']) && (REQUEST_TIME > $dates['end'])) {
+      _cis_service_connection_expire_roles($section);
+    }
+  }
 }
