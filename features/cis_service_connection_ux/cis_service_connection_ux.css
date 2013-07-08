@@ -21,11 +21,7 @@
 #regions_admin_left .nav-tabs {
   display:block;
 }
-#regions_admin_left #block-delta-blocks-tabs {
-  float: right;
-margin-top: -100px;
-margin-right: -4px;
-}
+
 #regions_admin_left ul.tabs {
   float:none;
   border:none;
