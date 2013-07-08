@@ -58,17 +58,21 @@ function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $m
   else {
     $response = _cis_connector_request($call, $options, $bucket, $cache);
   }
-  // parse format correctly for return if we can
-  switch ($format) {
-    case 'json':
-      $data = drupal_json_decode($response->data);
-    break;
-    case 'xml':
-      $data = simplexml_load_string($response->data);
-    break;
-    default:
-      $data = $response->data;
-    break;
+  // ensure a response to connect in the first place
+  $data = FALSE;
+  if ($response) {
+    // parse format correctly for return if we can
+    switch ($format) {
+      case 'json':
+        $data = drupal_json_decode($response->data);
+      break;
+      case 'xml':
+        $data = simplexml_load_string($response->data);
+      break;
+      default:
+        $data = $response->data;
+      break;
+    }
   }
   return $data;
 }
@@ -107,24 +111,27 @@ function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 
  * Wrapper for structured queries against CIS system
  */
 function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET', $bucket = 'cis', $instance = '', $cached = TRUE) {
-  $data = FALSE;
   // options for method
   $options = array('method' => $method);
   // build the call
   $call = $instance . $entity_type . '.' . $format . '?' . http_build_query($query);
   // generate the well structured request
   $response = _cis_connector_request($call, $options, $bucket, $cached);
-  // parse format correctly for return if we can
-  switch ($format) {
-    case 'json':
-      $data = drupal_json_decode($response->data);
-    break;
-    case 'xml':
-      $data = simplexml_load_string($response->data);
-    break;
-    default:
-      $data = $response->data;
-    break;
+  // ensure a response to connect in the first place
+  $data = FALSE;
+  if ($response) {
+    // parse format correctly for return if we can
+    switch ($format) {
+      case 'json':
+        $data = drupal_json_decode($response->data);
+      break;
+      case 'xml':
+        $data = simplexml_load_string($response->data);
+      break;
+      default:
+        $data = $response->data;
+      break;
+    }
   }
   return $data;
 }
@@ -455,6 +462,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
       }
       else {
         drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
+        return FALSE;
       }
       cache_set($cid, $data, 'cache_cis_connector');
     }
