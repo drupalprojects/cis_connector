@@ -35,7 +35,6 @@ function cis_section_field_default_fields() {
       'module' => 'text',
       'settings' => array(
         'max_length' => '255',
-        'profile2_private' => FALSE,
       ),
       'translatable' => '0',
       'type' => 'text',
@@ -103,7 +102,6 @@ function cis_section_field_default_fields() {
           1 => 'Private - accessible only to group members',
         ),
         'allowed_values_function' => '',
-        'profile2_private' => FALSE,
       ),
       'translatable' => '0',
       'type' => 'list_boolean',
@@ -181,7 +179,6 @@ function cis_section_field_default_fields() {
           1 => 'Group',
         ),
         'allowed_values_function' => '',
-        'profile2_private' => FALSE,
       ),
       'translatable' => '0',
       'type' => 'list_boolean',
