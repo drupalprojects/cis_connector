@@ -163,12 +163,6 @@ function cis_section_views_default_views() {
     7 => 0,
     3 => 0,
   );
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['autocomplete_filter'] = 1;
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['autocomplete_items'] = '10';
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['autocomplete_field'] = 'field_section_id';
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['autocomplete_raw_suggestion'] = 1;
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['autocomplete_raw_dropdown'] = 1;
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['autocomplete_dependent'] = 0;
 
   /* Display: Page */
   $handler = $view->new_display('page', 'Page', 'page');

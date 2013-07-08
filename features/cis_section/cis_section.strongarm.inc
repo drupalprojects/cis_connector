@@ -127,6 +127,48 @@ function cis_section_strongarm() {
   $strongarm = new stdClass();
   $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
   $strongarm->api_version = 1;
+  $strongarm->name = 'lti_tool_provider_og_group_mapping';
+  $strongarm->value = array(
+    'context_id' => 'field_section_id',
+    'context_label' => 'none',
+    'context_title' => 'title',
+    'context_type' => 'none',
+  );
+  $export['lti_tool_provider_og_group_mapping'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'lti_tool_provider_og_group_mapping_bundle';
+  $strongarm->value = 'node:section';
+  $export['lti_tool_provider_og_group_mapping_bundle'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'lti_tool_provider_og_group_role_array';
+  $strongarm->value = array(
+    'Learner' => '2',
+    'Instructor' => '2',
+    'ContentDeveloper' => '2',
+    'Member' => '2',
+    'Manager' => '2',
+    'Mentor' => '2',
+    'Administrator' => '2',
+    'TeachingAssistant' => '2',
+  );
+  $export['lti_tool_provider_og_group_role_array'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'lti_tool_provider_og_provision_groups';
+  $strongarm->value = 1;
+  $export['lti_tool_provider_og_provision_groups'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
   $strongarm->name = 'menu_options_section';
   $strongarm->value = array();
   $export['menu_options_section'] = $strongarm;

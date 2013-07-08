@@ -12,3 +12,57 @@ include_once 'cis_section.features.inc';
 function cis_section_page_build(&$page) {
   drupal_add_css(drupal_get_path('module', 'cis_section') . '/cis_section.css');
 }
+
+/**
+ * Load an organic group by unique section ID.
+ */
+function _cis_section_load_section_by_id($id) {
+  // entity field query to load a section by id
+  $query = new EntityFieldQuery();
+  $query
+  // pull group nodes
+  ->entityCondition('entity_type', 'node')
+  // of type section
+  ->entityCondition('bundle', 'section')
+  // that are published
+  ->propertyCondition('status', 1)
+  // only select based on the id we were passed
+  ->fieldCondition('field_section_id', 'value', $id, '=')
+  // execute this as user 1 to avoid object conflicts
+  ->addMetaData('account', user_load(1))
+  // only return 1 value
+  ->range(0, 1);
+  $result = $query->execute();
+  // flip the results if it found them
+  if (isset($result['node'])) {
+    // we know there's only 1 value in this array
+    return array_pop(array_keys($result['node']));
+  }
+  // no matches
+  return FALSE;
+}
+
+/**
+ * Load an organic group by unique section ID.
+ */
+function _cis_section_load_users_by_gid($gid, $rid = NULL) {
+  // select from membership
+  $query = db_select('og_membership', 'ogm');
+  // only entity id
+  $query->fields('ogm', array('etid'));
+  // join user table
+  $query->innerJoin('users', 'u', 'ogm.etid = u.uid');
+  // join role table
+  $query->innerJoin('users_roles', 'ur', 'u.uid = ur.uid');
+  // where entity type is user
+  $query->condition('ogm.entity_type', 'user');
+  // and group is the one requested
+  $query->condition('ogm.gid', $gid);
+  // limit to a certan role if set
+  if (!is_null($rid)) {
+    $query->condition('ur.rid', $rid);
+  }
+  $result = $query->execute();
+  // weird call but returns an array of the uids selected
+  return array_keys($result->fetchAllAssoc('etid'));
+}
