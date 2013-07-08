@@ -8,7 +8,7 @@ define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
  */
 function _cis_connector_build_registry($component = NULL) {
   // statically cache future calls
-    $settings = &drupal_static(__FUNCTION__ . $component);
+  $settings = &drupal_static(__FUNCTION__ . $component);
   if (!isset($settings)) {
     // invoke special hook for registry settings
     $settings = module_invoke_all('cis_service_registry');
@@ -32,7 +32,7 @@ function _cis_connector_build_registry($component = NULL) {
 /**
  * Wrapper for structured calls against CIS system
  */
-function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis', $instance = '') {
+function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis', $instance = '', $cache = TRUE, $extra = '') {
   // invoke special hook for registry settings
   // options for method
   $options = array('method' => $method);
@@ -46,12 +46,17 @@ function _cis_connection_object($id, $entity_type = 'node', $format = 'json', $m
   if (!empty($format)) {
     $call .= '.' . $format;
   }
+  // allow for custom additions of properties like deep-load-refs
+  if (!empty($extra)) {
+    $call .= '?' . $extra;
+  }
   // generate the well structured request
   if ($method == 'PUT') {
+    // PUT can not be cached
     $response = _cis_connector_request($call, $options, $bucket, FALSE);
   }
   else {
-    $response = _cis_connector_request($call, $options);
+    $response = _cis_connector_request($call, $options, $bucket, $cache);
   }
   // parse format correctly for return if we can
   switch ($format) {
@@ -144,7 +149,9 @@ function _cis_connector_format_address($settings, $instance = '') {
 function _cis_connector_real_address($path) {
   // verify settings bucket exist
   if ($settings = _cis_connector_build_registry('cis')) {
-    return str_replace($settings['service_address'], $settings['address'], $path);
+    // need to account for services in the services sites bucket
+    // then need to swap service address for front-end address
+    return str_replace('/services/', '/', str_replace($settings['service_address'], $settings['address'], $path));
   }
 }
 
@@ -164,7 +171,7 @@ function _cis_connector_section_context($account = NULL) {
       global $user;
       $account = $user;
     }
-    // attempt to grab og context, rare case but possible
+    // attempt to grab og context, rare but possible
     $group = og_context();
     if (isset($group['gid'])) {
       $group = node_load($group['gid']);
@@ -212,18 +219,6 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // return the whole section array
       $output = $cis_section_item['list'][0];
     break;
-    case 'instructional_outline':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // pull the outline to use
-      $output = $cis_section_item['list'][0]['field_instructional_outline'];
-      if ($format == 'redirect') {
-        // redirect to the UUID which will bounce to node uri
-        drupal_goto('uuid/node/' . $output);
-      }
-    break;
     case 'contact_info':
       // query access string based on section context
       $query = $base_query;
@@ -255,6 +250,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       }
     break;
     case 'help':
+    case 'guided_tour':
     case 'resources':
       // query access string based on section context
       $query = $base_query;
@@ -338,8 +334,33 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
         $output = ACTIVATION_CODE_ACCESS_DENY;
       }
     break;
+    case 'welcome_page':
+      // query access string based on section context
+      $query = $base_query;
+      // request the section of the user
+      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
+      $output = '';
+      if (!empty($cis_section_item)) {
+        // make sure a file was uploaded for this request
+        if (isset($cis_section_item['list'][0]['field_welcome_page']['value'])) {
+          $output = check_markup($cis_section_item['list'][0]['field_welcome_page']['value'], $cis_section_item['list'][0]['field_welcome_page']['format']);
+        }
+        else {
+          // request the standard language if we don't have custom
+          $query = array('type' => 'resource', 'field_machine_name' => 'field_welcome_letter');
+          $resource = _cis_connection_query($query);
+          // render text applying the input filter requested
+          $output = check_markup($resource['list'][0]['body']['value'], $resource['list'][0]['body']['format']);
+        }
+        // see if there's a welcome letter to append
+        if (isset($cis_section_item['list'][0]['field_welcome_letter'])) {
+          $file = _cis_connection_object($cis_section_item['list'][0]['field_welcome_letter']['file']['id'], 'file');
+          // append a download link
+          $output .= l(t('Download @request (PDF)', array('@request' => drupal_ucfirst('welcome_letter'))), $file['url']);
+        }
+      }
+    break;
     case 'welcome_letter':
-    case 'materials_letter':
     case 'syllabus':
       // query access string based on section context
       $query = $base_query;
@@ -357,7 +378,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           if ($format == 'download') {
             // return the file via direct http call
             $options = array();
-            $file_contents = _cis_connector_request($file['url'], $options, 'none', FALSE);
+            $file_contents = _cis_connector_request(_cis_connector_real_address($file['url']), $options, 'none', FALSE);
             // set the content type to the file returned info
             drupal_add_http_header('Content-type', $file['mime']);
             // set the filename to the file returned info
@@ -375,7 +396,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
             // render text applying the input filter requested
             $output = check_markup($resource['list'][0]['body']['value'], $resource['list'][0]['body']['format']);
             // append a download link
-            $output .= l(t('Download @request (PDF)', array('@request' => drupal_ucfirst($request))), $file['url']);
+            $output .= l(t('Download @request (PDF)', array('@request' => drupal_ucfirst($request))), _cis_connector_real_address($file['url']));
           }
         }
         else {
@@ -495,4 +516,17 @@ function cis_connector_views_api() {
     'api' => 3,
     'path' => drupal_get_path('module', 'cis_connector'),
   );
+}
+
+/**
+ * Access callback for user roles.
+ */
+function cis_connector_role_access($roles) {
+  global $user;
+  foreach ($roles as $role) {
+    if (in_array($role, $user->roles)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }
