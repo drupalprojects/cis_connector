@@ -1,10 +1,18 @@
 <?php
 define('CIS_SERVICE_CONNECTION_SYNC_FREQUENCY', 1);
-define('CIS_SERVICE_CONNECTION_HOMEPAGE', 'welcome_letter');
+define('CIS_SERVICE_CONNECTION_HOMEPAGE', 'welcome_page');
+
 /**
  * Implements hook_init().
  */
 function cis_service_connection_init() {}
+
+/**
+ * return array of links we support
+ */
+function _cis_service_connection_links() {
+  return array('welcome_page', 'syllabus', 'course-help', 'resources');
+}
 
 /**
  * Implements hook_thumbnav_widget().
@@ -83,8 +91,8 @@ function cis_service_connection_permission() {
  */
 function cis_service_connection_menu() {
   $items = array();
-  // standard language from cis
-  $items['welcome_letter'] = array(
+  // section specific language, or generic based on context
+  $items['welcome_page'] = array(
     'title' => 'Welcome',
     'page callback' => '_cis_connector_transaction',
     'page arguments' => array(0),
@@ -102,7 +110,7 @@ function cis_service_connection_menu() {
     'access arguments' => array('access content'),
   );
   // standard language from cis for help
-  $items['help'] = array(
+  $items['course-help'] = array(
     'title' => 'Help',
     'page callback' => '_cis_service_connection_page',
     'page arguments' => array(0),
@@ -120,38 +128,55 @@ function cis_service_connection_menu() {
     'access arguments' => array('access content'),
   );
   // direct download of the welcome letter, useful for remote referencing
-  $items['welcome_letter/download'] = array(
-    'title' => 'Welcome letter',
+  $items['welcome_page/download'] = array(
+    'title' => 'Letter',
     'page callback' => '_cis_connector_transaction',
-    'page arguments' => array(0, 1),
-    'type' => MENU_CALLBACK,
-    'access arguments' => array('access content'),
-  );
-  // direct download of the welcome letter, useful for remote referencing
-  $items['materials_letter/download'] = array(
-    'title' => 'Materials letter',
-    'page callback' => '_cis_connector_transaction',
-    'page arguments' => array(0, 1),
-    'type' => MENU_CALLBACK,
+    'page arguments' => array('welcome_letter', 1),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 2,
     'access arguments' => array('access content'),
   );
   // direct download of the syllabus, useful for remote referencing
   $items['syllabus/download'] = array(
-    'title' => 'Syllabus',
+    'title' => 'Download',
     'page callback' => '_cis_connector_transaction',
     'page arguments' => array(0, 1),
-    'type' => MENU_CALLBACK,
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 2,
     'access arguments' => array('access content'),
   );
-  // redirect to the active instructional outline
-  $items['instructional_outline/redirect'] = array(
-    'title' => 'Instructional Outline',
-    'page callback' => '_cis_connector_transaction',
-    'page arguments' => array(0, 1),
-    'type' => MENU_CALLBACK,
-    'access arguments' => array('access content'),
-  );
+  // build tabs for pages
+  $vals = _cis_service_connection_links();
+  foreach ($vals as $val) {
+    $items[$val . '/view'] = array(
+      'title' => 'View',
+      'page callback' => '_cis_connector_transaction',
+      'page arguments' => array(0),
+      'menu_name' => 'main-menu',
+      'weight' => 0,
+      'access arguments' => array('access content'),
+      'type' => MENU_DEFAULT_LOCAL_TASK
+    );
+    $items[$val . '/edit'] = array(
+      'title' => 'Edit',
+      'page callback' => '_cis_service_connection_edit_property',
+      'page arguments' => array(0),
+      'weight' => 1,
+      'access callback' => 'cis_connector_role_access',
+      'access arguments' => array(array('administrator', 'instructor', 'staff')),
+      'type' => MENU_LOCAL_TASK,
+    );
+  }
   return $items;
+}
+
+/**
+ * Callback to provide contextual link to correct location
+ */
+function _cis_service_connection_edit_property($property) {
+  $section = _cis_connector_transaction('section');
+  $path = _cis_connector_real_address($section['url']) . '/edit';
+  return '<iframe width="100%" height="600px" src="' . $path . '"></iframe>';
 }
 
 /**
@@ -160,6 +185,9 @@ function cis_service_connection_menu() {
 function _cis_service_connection_page($request) {
   $output = '';
   $suffix = '';
+  if ($request == 'course-help') {
+    $request = 'help';
+  }
   // allow for per option processing
   switch ($request) {
     case 'help':
@@ -238,11 +266,6 @@ function cis_service_connection_get_footer_language() {
  * Initial cron job to formally bind the CIS Service to the CIS.
  */
 function _cis_service_connection_initial_cis_bind() {
-  // this allows for targetting the 1 section for this new course
-  $query = array('field_instructional_outline' => variable_get('cis_service_instance_uuid', ''), 'archived' => 0);
-  
-  // return 1 section item based on this uuid in id outline
-  $cis_section_item = _cis_connection_query($query, 'field_collection_item');
   // select the service instance in question based on uuid
   $select = array(
     'type' => 'service_instance',
@@ -253,7 +276,7 @@ function _cis_service_connection_initial_cis_bind() {
   // set the data in the CIS
   _cis_connection_set_data($select, $data);
   // ask for the LTI request that will be recognized locally
-  if (module_exists('lti_tool_provider')) {
+  if (module_exists('cis_service_lti')) {
     _cis_service_lti_get_consumer();
   }
   // get the latest footer copy language
@@ -266,6 +289,7 @@ function _cis_service_connection_initial_cis_bind() {
  * Implements hook_set_cis_service_data().
  */
 function cis_service_connection_set_cis_service_data($delta) {
+  $data = array();
   switch ($delta) {
     case 'initial':
       // only set cron key on the first time this runs against a service
@@ -493,4 +517,15 @@ function _cis_service_connection_access_control() {
       _cis_service_connection_expire_roles($section);
     }
   }
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function cis_service_connection_admin_paths() {
+  $vals = _cis_service_connection_links();
+  foreach ($vals as $val) {
+    $paths[$val . '/edit'] = TRUE;
+  }
+  return $paths;
 }
