@@ -10,50 +10,6 @@
 function cis_section_field_default_field_instances() {
   $field_instances = array();
 
-  // Exported field_instance: 'node-section-field_instructional_outlines'
-  $field_instances['node-section-field_instructional_outlines'] = array(
-    'bundle' => 'section',
-    'default_value' => NULL,
-    'default_value_function' => 'entityreference_prepopulate_field_default_value',
-    'deleted' => 0,
-    'description' => '',
-    'display' => array(
-      'default' => array(
-        'label' => 'above',
-        'module' => 'entityreference',
-        'settings' => array(
-          'link' => FALSE,
-        ),
-        'type' => 'entityreference_label',
-        'weight' => 3,
-      ),
-    ),
-    'entity_type' => 'node',
-    'field_name' => 'field_instructional_outlines',
-    'label' => 'Instructional Outlines',
-    'required' => 0,
-    'settings' => array(
-      'behaviors' => array(
-        'prepopulate' => array(
-          'action' => 'none',
-          'action_on_edit' => 0,
-          'fallback' => 'none',
-          'og_context' => 0,
-          'skip_perm' => 0,
-          'status' => 1,
-        ),
-      ),
-      'user_register_form' => FALSE,
-    ),
-    'widget' => array(
-      'active' => 1,
-      'module' => 'options',
-      'settings' => array(),
-      'type' => 'options_select',
-      'weight' => 3,
-    ),
-  );
-
   // Exported field_instance: 'node-section-field_section_id'
   $field_instances['node-section-field_section_id'] = array(
     'bundle' => 'section',
@@ -205,7 +161,6 @@ function cis_section_field_default_field_instances() {
   // Included for use with string extractors like potx.
   t('Determine if this is an OG group.');
   t('Group');
-  t('Instructional Outlines');
   t('Section');
   t('Section id');
 
