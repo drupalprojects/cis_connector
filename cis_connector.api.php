@@ -21,6 +21,7 @@ function hook_cis_service_registry() {
       'pass' => 'password', // password for that connection account
       'mail' => 'account@example.com', // optional email address for associated account connection
       'college_machine' => 'aanda', // machine name for the college in question
+      'instance' => FALSE, // if this is a per instance distro or single system
     ),
   );
 }
@@ -32,4 +33,54 @@ function hook_cis_service_registry() {
 function hook_cis_service_registry_alter(&$registry) {
   // divert to a different connection address on a specific site
   $registry['cis']['address'] = 'www.example2.com';
+}
+
+/**
+ * Implements hook_cis_connected_entity().
+ * Define which and how entities can be used remotely.
+ */
+function hook_cis_connected_entity() {
+  $items = array(
+    // namespace helps allow for per bundle like node type1 / type2
+    // to be defined by other modules independently
+    'namespace' => array(
+      // entity type
+      'type' => 'entity type',
+      // bundle of that entity
+      'bundle' => 'bundle type',
+      // which cis buckets to write to
+      'buckets' => array('bucket1', 'bucket2'),
+      // how to save the item
+      // CIS_CONNECTOR_ENTITY_REMOTE_ONLY is for remote only
+      // CIS_CONNECTOR_ENTITY_BOTH is for saving locally and shipping off remotely
+      'save' => CIS_CONNECTOR_ENTITY_REMOTE_ONLY,
+      // additional options for 
+      'options' => array('blocking' => FALSE),
+    ),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_cis_connected_entity_alter().
+ * Alter the definitions
+ */
+function hook_cis_connected_entity_alter(&$items) {
+  // allow for modification of the items array
+  $items['namespace']['options'] = array();
+}
+
+/**
+ * Implements hook_cis_remote_entities_insert_alter
+ *
+ * return - Do something with the returned data, typically the NID or UUID
+ * created in the remote bucket.
+ * bucket - which bucket this is in reference to
+ */
+function hook_cis_remote_entities_insert(&$return, $bucket) {
+  // turn this into a direct link for a node
+  $tmp = drupal_json_decode($return);
+  $settings = _cis_connector_build_registry($bucket);
+  $url = $settings['protocol'] . '://' . $settings['address'] . '/node/' . $return['nid'];
+  $return = l(t('click to access item'), $url);
 }
