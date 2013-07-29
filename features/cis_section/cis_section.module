@@ -14,6 +14,64 @@ function cis_section_page_build(&$page) {
 }
 
 /**
+ * Implements hook_cron().
+ */
+function cis_section_cron() {
+  // the magic that keeps sections in sync with the cis
+  if (module_exists('cis_connector')) {
+    $query = array(
+      'type' => 'course',
+      'field_machine_name' => str_replace('/', '', base_path()),
+      'deep-load-refs' => 'field_collection_item', // special property that tells sections from course
+    );
+    // return a course
+    $return = _cis_connection_query($query, 'node', 'json', 'GET', 'cis', '', FALSE);
+    // look for 1 record
+    if (count($return['list']) == 1) {
+      $section_strings = array();
+      $course = $return['list'][0];
+      // loop through offerings
+      foreach ($course['field_offerings'] as $offering) {
+        // loop through sections if they exist
+        if (isset($offering['field_sections']['und']) && count($offering['field_sections']['und']) > 0) {
+          foreach ($offering['field_sections']['und'] as $section) {
+            // verify that this has the full object
+            if (!isset($section['value'])) {
+              // loop through access strings
+              // this is the magic that binds students to sections automatically
+              // and allows the entire network to work as an OG dark-net :)
+              if (isset($section['field_access_string']['und']) && count($section['field_access_string']['und']) > 0) {
+                foreach($section['field_access_string']['und'] as $string) {
+                  $section_strings[$string['safe_value']] = $string['safe_value'];
+                }
+              }
+            }
+          }
+        }
+      }
+      // loop through section strings to make sure we have a matching section node
+      foreach ($section_strings as $section_id) {
+        // if we don't know about this section, create it
+        if (!_cis_section_load_section_by_id($section_id)) {
+          $section = new stdClass();
+          $section->type = 'section';
+          node_object_prepare($section);
+          // currently both items are given the section id
+          $section->title = $section_id;
+          $section->field_section_id['und'][0]['value'] = $section_id;
+          $section->language = LANGUAGE_NONE;
+          // default these to admin ownership for less chance of seeing it
+          $section->uid = 1;
+          // save section, cron job will then be able to check data source for roster
+          // if that functionality is enabled in local instance
+          node_save($section);
+        }
+      }
+    }
+  }
+}
+
+/**
  * Load an organic group by unique section ID.
  */
 function _cis_section_load_section_by_id($id) {
@@ -58,7 +116,7 @@ function _cis_section_load_users_by_gid($gid, $rid = NULL) {
   $query->condition('ogm.entity_type', 'user');
   // and group is the one requested
   $query->condition('ogm.gid', $gid);
-  // limit to a certan role if set
+  // limit to a certain role if set
   if (!is_null($rid)) {
     $query->condition('ur.rid', $rid);
   }
