@@ -214,6 +214,8 @@ function _cis_connector_section_context($account = NULL) {
 
 /**
  * Callback to return structured data
+ *
+ * This is for some commonly requested things that may take multiple queries to accomplish
  */
 function _cis_connector_transaction($request, $format = 'default', $query = array(), $section = NULL) {
   // return false if we don't match a request
@@ -672,28 +674,31 @@ function cis_connector_form_field_ui_field_edit_form_alter(&$form, &$form_state)
 function cis_connector_entity_insert($entity, $type) {
   // only run this when it's our form deployed remotely
   $info = entity_get_info($type);
-  $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
-  // if we have at least 1 match, add the settings, otherwise never runs
-  foreach ($rem as $key => $item) {
-    // make sure this isn't the current bucket we are working in
-    if (!in_array(variable_get('install_profile', ''), $item['buckets'])) {
-      // prepare the item for shipment
-      $data = _cis_connection_prepare_entity($entity);
-      // execute call
-      foreach ($item['buckets'] as $bucket) {
-        // post the formatted object to the other address
-        $instance = '';
-        $settings = _cis_connector_build_registry($bucket);
-        if ($settings['instance']) {
-          $instance = str_replace('/', '', base_path()) . '/';
+  // ensure we have bundle keys at least after loading info
+  if (isset($info['bundle keys']['bundle']) && isset($entity->{$info['bundle keys']['bundle']})) {
+    $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
+    // if we have at least 1 match, add the settings, otherwise never runs
+    foreach ($rem as $key => $item) {
+      // make sure this isn't the current bucket we are working in
+      if (!in_array(variable_get('install_profile', ''), $item['buckets'])) {
+        // prepare the item for shipment
+        $data = _cis_connection_prepare_entity($entity);
+        // execute call
+        foreach ($item['buckets'] as $bucket) {
+          // post the formatted object to the other address
+          $instance = '';
+          $settings = _cis_connector_build_registry($bucket);
+          if ($settings['instance']) {
+            $instance = str_replace('/', '', base_path()) . '/';
+          }
+          $return = _cis_connection_object(NULL, $type, NULL, 'POST', $data, $bucket, $instance, FALSE, '', $item['options']);
+          // if non-blocking this won't have anything it can do but still..
+          drupal_alter('cis_remote_entities_insert', $return, $bucket);
         }
-        $return = _cis_connection_object(NULL, $type, NULL, 'POST', $data, $bucket, $instance, FALSE, '', $item['options']);
-        // if non-blocking this won't have anything it can do but still..
-        drupal_alter('cis_remote_entities_insert', $return, $bucket);
-      }
-      // our save mode told us to remove the current one
-      if ($item['save'] == CIS_CONNECTOR_ENTITY_REMOTE_ONLY) {
-        entity_delete($type, $entity->nid);
+        // our save mode told us to remove the current one
+        if ($item['save'] == CIS_CONNECTOR_ENTITY_REMOTE_ONLY) {
+          entity_delete($type, $entity->nid);
+        }
       }
     }
   }
@@ -705,17 +710,19 @@ function cis_connector_entity_insert($entity, $type) {
 function cis_connector_entity_presave($entity, $type) {
   // only run this when it's our form deployed remotely
   $info = entity_get_info($type);
-  $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
-  if (count($rem) > 0) {
-    $item = array_pop($rem);
-    // if we have at least 1 match, bother to test
-    if (in_array(variable_get('install_profile', ''), $item['buckets'])) {
-      // don't allow annonymous submissions from outside system
-      // this applies at the moment for service account based items
-      // this is the only account able to post in this manner
-      // but we verify this anyway based on role
-      if ($entity->uid == 0 && in_array('SERVICE ACCOUNT', $GLOBALS['user']->roles)) {
-        $entity->uid = $GLOBALS['user']->uid;
+  if (isset($info['bundle keys']['bundle']) && isset($entity->{$info['bundle keys']['bundle']})) {
+    $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
+    if (count($rem) > 0) {
+      $item = array_pop($rem);
+      // if we have at least 1 match, bother to test
+      if (in_array(variable_get('install_profile', ''), $item['buckets'])) {
+        // don't allow annonymous submissions from outside system
+        // this applies at the moment for service account based items
+        // this is the only account able to post in this manner
+        // but we verify this anyway based on role
+        if ($entity->uid == 0 && in_array('SERVICE ACCOUNT', $GLOBALS['user']->roles)) {
+          $entity->uid = $GLOBALS['user']->uid;
+        }
       }
     }
   }
