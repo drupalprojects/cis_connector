@@ -233,8 +233,6 @@ function cis_service_connection_cron() {
     if (!empty($data)) {
       _cis_connection_set_data($select, $data);
     }
-    // ensure users that should be here still are
-    _cis_service_connection_access_control();
     variable_set('cis_service_connection_last_sync', REQUEST_TIME);
   }
   // clear cached versions of section queries regardless of condition
@@ -396,7 +394,7 @@ function cis_service_connection_block_section_context_changer_form_submit($form,
  * Return all found sections as these are valid for switching
  * This is essentially a list of the current user's groups
  */
-function cis_service_connection_all_section() {
+function cis_service_connection_all_section($active_only = false) {
   $sections = array();
   // select field section data
   $query = new EntityFieldQuery();
@@ -406,6 +404,10 @@ function cis_service_connection_all_section() {
   ->entityCondition('bundle', 'section')
   // that are published
   ->propertyCondition('status', 1);
+  // allow for filtering by active state
+  if ($active_only) {
+    $query->fieldCondition('field_cis_active', 'value', 1, '=');
+  }
   // store results
   $result = $query->execute();
   // ensure we have results
@@ -502,21 +504,6 @@ function _cis_service_connection_get_users_in_group($gid) {
     $uids[] = $record->etid;
   }
   return $uids;
-}
-
-/**
- * Test if each section's users should still have student access rights.
- */
-function _cis_service_connection_access_control() {
-  // test all sections based on their dates
-  $sections = array_keys(cis_service_connection_all_section());
-  foreach ($sections as $section) {
-    $dates = _cis_connector_transaction('section_dates', 'default', array(), $section);
-    // only perform this if we have an end date stored
-    if (isset($dates['end']) && (REQUEST_TIME > $dates['end'])) {
-      _cis_service_connection_expire_roles($section);
-    }
-  }
 }
 
 /**
