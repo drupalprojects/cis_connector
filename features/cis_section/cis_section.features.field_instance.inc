@@ -10,6 +10,43 @@
 function cis_section_field_default_field_instances() {
   $field_instances = array();
 
+  // Exported field_instance: 'node-section-field_cis_active'
+  $field_instances['node-section-field_cis_active'] = array(
+    'bundle' => 'section',
+    'default_value' => array(
+      0 => array(
+        'value' => 1,
+      ),
+    ),
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'list',
+        'settings' => array(),
+        'type' => 'list_default',
+        'weight' => 3,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_cis_active',
+    'label' => 'Active',
+    'required' => 0,
+    'settings' => array(
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'options',
+      'settings' => array(
+        'display_label' => 0,
+      ),
+      'type' => 'options_onoff',
+      'weight' => 3,
+    ),
+  );
+
   // Exported field_instance: 'node-section-field_section_id'
   $field_instances['node-section-field_section_id'] = array(
     'bundle' => 'section',
@@ -159,6 +196,7 @@ function cis_section_field_default_field_instances() {
 
   // Translatables
   // Included for use with string extractors like potx.
+  t('Active');
   t('Determine if this is an OG group.');
   t('Group');
   t('Section');
