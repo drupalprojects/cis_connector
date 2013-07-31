@@ -59,6 +59,8 @@ function cis_section_cron() {
           // currently both items are given the section id
           $section->title = $section_id;
           $section->field_section_id['und'][0]['value'] = $section_id;
+          // mark this as active so it can sync with systems
+          $section->field_cis_active['und'][0]['value'] = 1;
           $section->language = LANGUAGE_NONE;
           // default these to admin ownership for less chance of seeing it
           $section->uid = 1;
@@ -67,6 +69,48 @@ function cis_section_cron() {
           node_save($section);
         }
       }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function cis_section_node_insert($node) {
+  // account for newly created sections being activated so we can react immediately
+  if ($node->type == 'section' && $node->field_cis_active['und'][0]['value'] == 1) {
+    module_invoke_all('cis_section_activated', $node);
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function cis_section_node_update($node) {
+  // test for a section being deactivated
+  if ($node->type == 'section') {
+    if ($node->field_cis_active['und'][0]['value'] == 0) {
+      // allow other projects to perform actions based on this node being deactivated
+      module_invoke_all('cis_section_deactivated', $node);
+      //TODO move this to a deactivation hook implementation
+      // standard conversion of student to past student roles
+      $student = user_role_load_by_name('student');
+      $past = user_role_load_by_name('past student');
+      $current = _cis_section_load_users_by_gid($node->nid, $student->rid);
+      // find users that no longer came across
+      $diff = array_diff($current, array());
+      foreach ($diff as $uid) {
+        $account = user_load($uid);
+        // drop student role
+        unset($account->roles[$student->rid]);
+        // gain past student role
+        $account->roles[$past->rid] = $past->name;
+        user_save($account);
+      }
+    }
+    else {
+      // allow other projects to perform actions based on this node being activated
+      module_invoke_all('cis_section_activated', $node);
     }
   }
 }
