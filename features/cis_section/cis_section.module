@@ -3,6 +3,9 @@
  * @file
  * Code for the CIS Section feature.
  */
+ 
+define('CIS_SECTION_STUDENT', 'student');
+define('CIS_SECTION_PAST_STUDENT', 'past student');
 
 include_once 'cis_section.features.inc';
 
@@ -79,7 +82,7 @@ function cis_section_cron() {
 function cis_section_node_insert($node) {
   // account for newly created sections being activated so we can react immediately
   if ($node->type == 'section' && $node->field_cis_active['und'][0]['value'] == 1) {
-    module_invoke_all('cis_section_activated', $node);
+    cis_section_state_change($node, 'activate');
   }
 }
 
@@ -90,28 +93,39 @@ function cis_section_node_update($node) {
   // test for a section being deactivated
   if ($node->type == 'section') {
     if ($node->field_cis_active['und'][0]['value'] == 0) {
-      // allow other projects to perform actions based on this node being deactivated
-      module_invoke_all('cis_section_deactivated', $node);
-      //TODO move this to a deactivation hook implementation
-      // standard conversion of student to past student roles
-      $student = user_role_load_by_name('student');
-      $past = user_role_load_by_name('past student');
-      $current = _cis_section_load_users_by_gid($node->nid, $student->rid);
-      // find users that no longer came across
-      $diff = array_diff($current, array());
-      foreach ($diff as $uid) {
-        $account = user_load($uid);
-        // drop student role
-        unset($account->roles[$student->rid]);
-        // gain past student role
-        $account->roles[$past->rid] = $past->name;
-        user_save($account);
-      }
+      cis_section_state_change($node, 'deactivate');
     }
     else {
       // allow other projects to perform actions based on this node being activated
-      module_invoke_all('cis_section_activated', $node);
+      cis_section_state_change($node, 'activate');
     }
+  }
+}
+
+/**
+ * Implements hook_cis_section_deactivate().
+ */
+function cis_section_cis_section_deactivate() {
+  return array('_cis_section_deactivate_section');
+}
+
+/**
+ * Implements hook_cis_section_deactivate().
+ */
+function _cis_section_deactivate_section($node) {
+  // standard conversion of student to past student roles
+  $student = user_role_load_by_name(CIS_SECTION_STUDENT);
+  $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
+  $current = _cis_section_load_users_by_gid($node->nid, $student->rid);
+  // find users that no longer came across
+  $diff = array_diff($current, array());
+  foreach ($diff as $uid) {
+    $account = user_load($uid);
+    // drop student role
+    unset($account->roles[$student->rid]);
+    // gain past student role
+    $account->roles[$past->rid] = $past->name;
+    user_save($account);
   }
 }
 
@@ -167,4 +181,107 @@ function _cis_section_load_users_by_gid($gid, $rid = NULL) {
   $result = $query->execute();
   // weird call but returns an array of the uids selected
   return array_keys($result->fetchAllAssoc('etid'));
+}
+
+/**
+ * Run hooks for state of section.
+ */
+function cis_section_state_change($node, $state = 'activate') {
+  // activate / deactivate only two allowed states at this time
+  if (!in_array($state, array('activate', 'deactivate'))) {
+    return FALSE;
+  }
+  // easier calls for activate / deactivate in bulk
+  $calls = module_invoke_all('cis_section_' . $state);
+  // alter the call list
+  drupal_alter('cis_section_' . $state, $calls);
+  // run each call
+  foreach ($calls as $call) {
+    call_user_func($call, $node);
+  }
+}
+
+/**
+ * Create accounts, groups, and associate to groups.
+ */
+function _cis_section_create_accounts($roster) {
+  // loop through sections in the overall access roster
+  foreach ($roster as $section => $members) {
+    // loop through the user / role combination
+    foreach ($members as $name => $role_name) {
+      // convert role name to object bc of stupid storage convention for account creation
+      $role = user_role_load_by_name($role_name);
+      // try and load the account first
+      if (!($account = user_load_by_name($name))) {
+        $fields = array(
+          'name' => $name,
+          'pass' => user_password(20),
+          'status' => 1,
+          'init' => $email,
+          'roles' => array(
+            DRUPAL_AUTHENTICATED_RID => 'authenticated user',
+            $role->rid => $role->name,
+          ),
+        );
+        // allow other projects to update part of the user
+        drupal_alter('cis_section_user_insert', $fields);
+        //the first parameter is left blank so a new user is created
+        $account = user_save('', $fields);
+      }
+      else {
+        // only save role if it is new
+        if (!isset($account->roles[$role->rid])) {
+          $account->roles[$role->rid] = $role->name;
+          user_save($account);
+        }
+      }
+      // load group by section
+      $gid = _cis_section_load_section_by_id($section);
+      // false returned if this group doesn't exist
+      if (!$gid) {
+        // we need to create the group as this is a new one
+        // this can happen if we get a group not created via LTI
+        $group = new stdClass();
+        $group->type = 'section';
+        $group->status = 1;
+        $group->uid = 1;
+        $group->title = $section;
+        $group->promote = 0;
+        $group->revision = 1;
+        $group->field_section_id = array(
+          'und' => array(
+            0 => array(
+              'value' => $section,
+            ),
+          ),
+        );
+        node_save($group);
+        $gid = $group->nid;
+      }
+      // add group membership
+      $values = array(
+        'entity_type' => 'user',
+        'entity' => $account,
+      );
+      og_group('node', $gid, $values);
+      // rip membership names to uid array for comparison
+      $actual[] = $account->uid;
+    }
+    // compare members that just came across to members currently (that are students)
+    // anyone currently that didn't just come across, gets role dropped
+    // they gain past student
+    $student = user_role_load_by_name(CIS_SECTION_STUDENT);
+    $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
+    $current = _cis_section_load_users_by_gid($gid, $student->rid);
+    // find users that no longer came across
+    $diff = array_diff($current, $actual);
+    foreach ($diff as $uid) {
+      $account = user_load($uid);
+      // drop student role
+      unset($account->roles[$student->rid]);
+      // gain past student role
+      $account->roles[$past->rid] = $past->name;
+      user_save($account);
+    }
+  }
 }
