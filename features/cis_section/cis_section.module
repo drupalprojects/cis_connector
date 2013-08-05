@@ -21,25 +21,30 @@ function cis_section_page_build(&$page) {
  */
 function cis_section_cron() {
   // the magic that keeps sections in sync with the cis
-  if (module_exists('cis_connector')) {
-    $query = array(
-      'type' => 'course',
-      'field_machine_name' => str_replace('/', '', base_path()),
-      'deep-load-refs' => 'field_collection_item', // special property that tells sections from course
-    );
-    // return a course
-    $return = _cis_connection_query($query, 'node', 'json', 'GET', 'cis', '', FALSE);
-    // look for 1 record
-    if (count($return['list']) == 1) {
-      $section_strings = array();
-      $course = $return['list'][0];
-      // loop through offerings
-      foreach ($course['field_offerings'] as $offering) {
-        // loop through sections if they exist
-        if (isset($offering['field_sections']['und']) && count($offering['field_sections']['und']) > 0) {
-          foreach ($offering['field_sections']['und'] as $section) {
-            // verify that this has the full object
-            if (!isset($section['value'])) {
+  $query = array(
+    'type' => 'course',
+    'field_machine_name' => str_replace('/', '', base_path()),
+    'deep-load-refs' => 'field_collection_item', // special property that tells sections from course
+  );
+  // return a course
+  $return = _cis_connection_query($query, 'node', 'json', 'GET', 'cis', '', FALSE);
+  // look for 1 record
+  if (count($return['list']) == 1) {
+    $section_strings = array();
+    $course = $return['list'][0];
+    // loop through offerings
+    foreach ($course['field_offerings'] as $offering) {
+      // loop through sections if they exist
+      if (isset($offering['field_sections']['und']) && count($offering['field_sections']['und']) > 0) {
+        foreach ($offering['field_sections']['und'] as $section) {
+          // verify that this has the full object
+          if (isset($section['item_id'])) {
+            $start = $section['field_access_dates']['und'][0]['value'];
+            // make sure that we are past the start date of the course
+            // if this section hasn't started running, no reason to sync
+            // this prevents those setting things up early from accidentally
+            // pushing users into sections and sections in to services too early
+            if (REQUEST_TIME > strtotime($start)) {
               // loop through access strings
               // this is the magic that binds students to sections automatically
               // and allows the entire network to work as an OG dark-net :)
@@ -52,28 +57,103 @@ function cis_section_cron() {
           }
         }
       }
-      // loop through section strings to make sure we have a matching section node
-      foreach ($section_strings as $section_id) {
-        // if we don't know about this section, create it
-        if (!_cis_section_load_section_by_id($section_id)) {
-          $section = new stdClass();
-          $section->type = 'section';
-          node_object_prepare($section);
-          // currently both items are given the section id
-          $section->title = $section_id;
-          $section->field_section_id['und'][0]['value'] = $section_id;
-          // mark this as active so it can sync with systems
-          $section->field_cis_active['und'][0]['value'] = 1;
-          $section->language = LANGUAGE_NONE;
-          // default these to admin ownership for less chance of seeing it
-          $section->uid = 1;
-          // save section, cron job will then be able to check data source for roster
-          // if that functionality is enabled in local instance
-          node_save($section);
-        }
+    }
+    // loop through section strings to make sure we have a matching section node
+    foreach ($section_strings as $section_id) {
+      // if we don't know about this section, create it
+      if (!_cis_section_load_section_by_id($section_id)) {
+        $section = new stdClass();
+        $section->type = 'section';
+        node_object_prepare($section);
+        // currently both items are given the section id
+        $section->title = $section_id;
+        $section->field_section_id['und'][0]['value'] = $section_id;
+        // mark this as active so it can sync with systems
+        $section->field_cis_active['und'][0]['value'] = 1;
+        $section->language = LANGUAGE_NONE;
+        // default these to admin ownership for less chance of seeing it
+        $section->uid = 1;
+        // save section, cron job will then be able to check data source for roster
+        // if that functionality is enabled in local instance
+        node_save($section);
       }
     }
   }
+  // test for if we should sync w/ our roster provider
+  $frequency = variable_get('cis_service_connection_sync_frequency', CIS_SERVICE_CONNECTION_SYNC_FREQUENCY);
+  $interval = 86400 * $frequency;
+  // sync this course with LMS based on section data if time has passed
+  if (isset($_GET['force_roster_sync']) || (REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval) {
+    // simple section pull based on those included locally
+    $sections = array_keys(cis_section_all_sections(TRUE));
+    // pull the roster together
+    $roster = cis_section_assemble_roster($sections);
+    // build the user accounts
+    watchdog('roster', 'Roster service synced with !roster sections', array('!roster' => count($roster)));
+    _cis_section_create_accounts($roster);
+  }
+}
+
+/**
+ * Return all found sections as these are valid for switching
+ * This is essentially a list of the current user's groups
+ */
+function cis_section_all_sections($active_only = false) {
+  $sections = array();
+  // select field section data
+  $query = new EntityFieldQuery();
+  // pull all nodes
+  $query->entityCondition('entity_type', 'node')
+  // that are sections
+  ->entityCondition('bundle', 'section')
+  // that are published
+  ->propertyCondition('status', 1);
+  // allow for filtering by active state
+  if ($active_only) {
+    $query->fieldCondition('field_cis_active', 'value', 1, '=');
+  }
+  // store results
+  $result = $query->execute();
+  // ensure we have results
+  if (isset($result['node'])) {
+    $nids = array_keys($result['node']);
+    $results = entity_load('node', $nids);
+    // convert to a readable array of options
+    foreach ($results as $val) {
+      $section = $val->field_section_id['und'][0]['safe_value'];
+      $sections[$section] = $section;
+    }
+    // useful for custom college / university integrations
+    drupal_alter('cis_section_list', $sections);
+  }
+  return $sections;
+}
+
+/**
+ * Assemble the roster, we must have another module implement roster code
+ * to use this.
+ */
+function cis_section_assemble_roster($sections, $activated = FALSE) {
+  // build roster based on an array of sections
+  $roster = array();
+  foreach ($sections as $section) {
+    // can be redundant but helps remove purely developmental section values
+    $dates = _cis_connector_transaction('section_dates', 'default', array(), $section);
+    // only perform this if we have an end date stored
+    if ((isset($dates['end']) && (REQUEST_TIME < $dates['end'])) || $activated) {
+      // build the roster for this section
+      $roster[$section] = module_invoke_all('cis_section_build_roster', $section);
+    }
+    // test for date being set and it being after the end date of course
+    else if (isset($dates['end']) && REQUEST_TIME > $dates['end']) {
+      $nid = _cis_section_load_section_by_id($section);
+      $node = node_load($nid);
+      // mark this as inactive, this will trigger the cis_section clean up on node_update hook
+      $node->field_cis_active['und'][0]['value'] = 0;
+      node_save($node);
+    }
+  }
+  return $roster;
 }
 
 /**
@@ -100,6 +180,27 @@ function cis_section_node_update($node) {
       cis_section_state_change($node, 'activate');
     }
   }
+}
+
+/**
+ * Implements hook_cis_section_activate().
+ */
+function cis_section_cis_section_activate() {
+  return array('_cis_section_activate_section');
+}
+
+/**
+ * Callback for hook_cis_section_activate().
+ */
+function _cis_section_activate_section($node) {
+  // grab section id
+  $section = array($node->field_section_id['und'][0]['value']);
+  // pull the roster together for this section
+  $roster = cis_section_assemble_roster($section, TRUE);
+  // build the user accounts
+  watchdog('roster', 'Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value']));
+  _cis_section_create_accounts($roster);
+  drupal_set_message(t('Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value'])));
 }
 
 /**
@@ -130,60 +231,6 @@ function _cis_section_deactivate_section($node) {
 }
 
 /**
- * Load an organic group by unique section ID.
- */
-function _cis_section_load_section_by_id($id) {
-  // entity field query to load a section by id
-  $query = new EntityFieldQuery();
-  $query
-  // pull group nodes
-  ->entityCondition('entity_type', 'node')
-  // of type section
-  ->entityCondition('bundle', 'section')
-  // that are published
-  ->propertyCondition('status', 1)
-  // only select based on the id we were passed
-  ->fieldCondition('field_section_id', 'value', $id, '=')
-  // execute this as user 1 to avoid object conflicts
-  ->addMetaData('account', user_load(1))
-  // only return 1 value
-  ->range(0, 1);
-  $result = $query->execute();
-  // flip the results if it found them
-  if (isset($result['node'])) {
-    // we know there's only 1 value in this array
-    return array_pop(array_keys($result['node']));
-  }
-  // no matches
-  return FALSE;
-}
-
-/**
- * Load an organic group by unique section ID.
- */
-function _cis_section_load_users_by_gid($gid, $rid = NULL) {
-  // select from membership
-  $query = db_select('og_membership', 'ogm');
-  // only entity id
-  $query->fields('ogm', array('etid'));
-  // join user table
-  $query->innerJoin('users', 'u', 'ogm.etid = u.uid');
-  // join role table
-  $query->innerJoin('users_roles', 'ur', 'u.uid = ur.uid');
-  // where entity type is user
-  $query->condition('ogm.entity_type', 'user');
-  // and group is the one requested
-  $query->condition('ogm.gid', $gid);
-  // limit to a certain role if set
-  if (!is_null($rid)) {
-    $query->condition('ur.rid', $rid);
-  }
-  $result = $query->execute();
-  // weird call but returns an array of the uids selected
-  return array_keys($result->fetchAllAssoc('etid'));
-}
-
-/**
  * Run hooks for state of section.
  */
 function cis_section_state_change($node, $state = 'activate') {
@@ -198,6 +245,18 @@ function cis_section_state_change($node, $state = 'activate') {
   // run each call
   foreach ($calls as $call) {
     call_user_func($call, $node);
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function cis_section_module_implements_alter(&$implementations, $hook) {
+  // attempt to move this to the last thing to fire
+  if ($hook == 'cron') {
+    $group = $implementations['cis_section'];
+    unset($implementations['cis_section']);
+    $implementations['cis_section'] = $group;
   }
 }
 
@@ -284,4 +343,58 @@ function _cis_section_create_accounts($roster) {
       user_save($account);
     }
   }
+}
+
+/**
+ * Load an organic group by unique section ID.
+ */
+function _cis_section_load_section_by_id($id) {
+  // entity field query to load a section by id
+  $query = new EntityFieldQuery();
+  $query
+  // pull group nodes
+  ->entityCondition('entity_type', 'node')
+  // of type section
+  ->entityCondition('bundle', 'section')
+  // that are published
+  ->propertyCondition('status', 1)
+  // only select based on the id we were passed
+  ->fieldCondition('field_section_id', 'value', $id, '=')
+  // execute this as user 1 to avoid object conflicts
+  ->addMetaData('account', user_load(1))
+  // only return 1 value
+  ->range(0, 1);
+  $result = $query->execute();
+  // flip the results if it found them
+  if (isset($result['node'])) {
+    // we know there's only 1 value in this array
+    return array_pop(array_keys($result['node']));
+  }
+  // no matches
+  return FALSE;
+}
+
+/**
+ * Load an organic group by unique section ID.
+ */
+function _cis_section_load_users_by_gid($gid, $rid = NULL) {
+  // select from membership
+  $query = db_select('og_membership', 'ogm');
+  // only entity id
+  $query->fields('ogm', array('etid'));
+  // join user table
+  $query->innerJoin('users', 'u', 'ogm.etid = u.uid');
+  // join role table
+  $query->innerJoin('users_roles', 'ur', 'u.uid = ur.uid');
+  // where entity type is user
+  $query->condition('ogm.entity_type', 'user');
+  // and group is the one requested
+  $query->condition('ogm.gid', $gid);
+  // limit to a certain role if set
+  if (!is_null($rid)) {
+    $query->condition('ur.rid', $rid);
+  }
+  $result = $query->execute();
+  // weird call but returns an array of the uids selected
+  return array_keys($result->fetchAllAssoc('etid'));
 }

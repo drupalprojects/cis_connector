@@ -40,6 +40,25 @@ function hook_cis_section_deactivate() {
 }
 
 /**
+ * Implements hook_cis_section_build_roster().
+ *
+ * $section is a unique identifier for asking a roster
+ * service for the students / instructors are associated.
+ *
+ * Returned structured expected to be array
+ * $roster[$member['user_id']] = $member['course_rights'];
+ */
+function hook_cis_section_build_roster($section) {
+  // user name => role id, you'll want
+  return array(
+    'name' => 'student',
+    'name2' => 'student',
+    'name3' => 'instructor',
+    'name4' => 'student',
+  );
+}
+
+/**
  * Implements hook_cis_section_user_insert_alter().
  *
  * Allow modification of the user object just prior to insert
