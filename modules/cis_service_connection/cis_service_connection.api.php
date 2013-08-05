@@ -13,12 +13,3 @@ function hook_set_cis_service_data($delta) {
     );
   }
 }
-
-/**
- * Implements hook_cis_section_list_alter().
- * Allow for modification of the system reported section list
- */
-function hook_cis_section_list_alter(&$sections) {
-  // add a section called default
-  $sections['default'] = t('Default');
-}

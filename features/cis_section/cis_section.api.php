@@ -1,4 +1,7 @@
 <?php
+// passing force_roster_sync via cron to any site running this code
+// will skip it's normal sync routine and run immediately to sync the roster
+
 /**
  * Implements hook_cis_section_activate().
  *
@@ -46,4 +49,13 @@ function hook_cis_section_deactivate() {
  */
 function hook_cis_section_user_insert_alter(&$fields) {
   $fields['email'] = _psu_utility_name_to_email($fields['name']);
+}
+
+/**
+ * Implements hook_cis_section_list_alter().
+ * Allow for modification of the system reported section list
+ */
+function hook_cis_section_list_alter(&$sections) {
+  // add a section called default
+  $sections['default'] = t('Default');
 }

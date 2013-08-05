@@ -355,7 +355,7 @@ function cis_service_connection_block_instructor_contact() {
  */
 function cis_service_connection_block_section_context_changer_form() {
   // provide all sections of students in this course
-  $sections = cis_service_connection_all_section();
+  $sections = cis_section_all_sections();
   $form = array();
   $form['section'] = array(
     '#type' => 'select',
@@ -388,41 +388,6 @@ function cis_service_connection_block_section_context_changer_form_submit($form,
   else {
     $_SESSION['cis_section_context'] = $form_state['values']['section'];
   }
-}
-
-/**
- * Return all found sections as these are valid for switching
- * This is essentially a list of the current user's groups
- */
-function cis_service_connection_all_section($active_only = false) {
-  $sections = array();
-  // select field section data
-  $query = new EntityFieldQuery();
-  // pull all nodes
-  $query->entityCondition('entity_type', 'node')
-  // that are sections
-  ->entityCondition('bundle', 'section')
-  // that are published
-  ->propertyCondition('status', 1);
-  // allow for filtering by active state
-  if ($active_only) {
-    $query->fieldCondition('field_cis_active', 'value', 1, '=');
-  }
-  // store results
-  $result = $query->execute();
-  // ensure we have results
-  if (isset($result['node'])) {
-    $nids = array_keys($result['node']);
-    $results = entity_load('node', $nids);
-    // convert to a readable array of options
-    foreach ($results as $val) {
-      $section = $val->field_section_id['und'][0]['safe_value'];
-      $sections[$section] = $section;
-    }
-    // useful for custom college / university integrations
-    drupal_alter('cis_section_list', $sections);
-  }
-  return $sections;
 }
 
 /**
