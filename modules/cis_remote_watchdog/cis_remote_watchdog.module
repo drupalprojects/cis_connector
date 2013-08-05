@@ -32,7 +32,7 @@ function cis_remote_watchdog_watchdog(array $log_entry) {
     'timestamp' => $log_entry['timestamp'],
   );
   // force message to be sent without waiting for confirmation
-  $call_options = array();
+  $call_options = array('blocking' => FALSE);
   // push watchdog message to remote_watchdog without waiting for a response
   _cis_connection_object(NULL, 'watchdog', NULL, 'POST', $data, 'remote_watchdog', '', FALSE, '', $call_options);
 }
