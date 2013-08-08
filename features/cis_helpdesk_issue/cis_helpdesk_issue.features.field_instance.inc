@@ -10,73 +10,6 @@
 function cis_helpdesk_issue_field_default_field_instances() {
   $field_instances = array();
 
-  // Exported field_instance: 'node-cis_helpdesk_issue-body'
-  $field_instances['node-cis_helpdesk_issue-body'] = array(
-    'bundle' => 'cis_helpdesk_issue',
-    'default_value' => NULL,
-    'deleted' => 0,
-    'description' => 'Can you please describe the issue you are having?',
-    'display' => array(
-      'default' => array(
-        'label' => 'hidden',
-        'module' => 'text',
-        'settings' => array(),
-        'type' => 'text_default',
-        'weight' => 2,
-      ),
-      'teaser' => array(
-        'label' => 'hidden',
-        'module' => 'text',
-        'settings' => array(
-          'trim_length' => 600,
-        ),
-        'type' => 'text_summary_or_trimmed',
-        'weight' => 0,
-      ),
-    ),
-    'entity_type' => 'node',
-    'field_name' => 'body',
-    'label' => 'Description',
-    'required' => 1,
-    'settings' => array(
-      'better_formats' => array(
-        'allowed_formats' => array(
-          'filtered_html' => 0,
-          'plain_text' => 'plain_text',
-          'textbook_editor' => 0,
-        ),
-        'allowed_formats_toggle' => 1,
-        'default_order_toggle' => 0,
-        'default_order_wrapper' => array(
-          'formats' => array(
-            'filtered_html' => array(
-              'weight' => 0,
-            ),
-            'plain_text' => array(
-              'weight' => 10,
-            ),
-            'textbook_editor' => array(
-              'weight' => -10,
-            ),
-          ),
-        ),
-      ),
-      'display_summary' => 0,
-      'text_processing' => 1,
-      'user_register_form' => FALSE,
-    ),
-    'widget' => array(
-      'active' => 1,
-      'module' => 'text',
-      'settings' => array(
-        'rows' => 5,
-        'summary_rows' => 5,
-      ),
-      'type' => 'text_textarea_with_summary',
-      'weight' => 3,
-    ),
-  );
-
   // Exported field_instance: 'node-cis_helpdesk_issue-field_cis_hd_course'
   $field_instances['node-cis_helpdesk_issue-field_cis_hd_course'] = array(
     'bundle' => 'cis_helpdesk_issue',
@@ -143,6 +76,70 @@ function cis_helpdesk_issue_field_default_field_instances() {
       ),
       'type' => 'select_or_other',
       'weight' => 8,
+    ),
+  );
+
+  // Exported field_instance: 'node-cis_helpdesk_issue-field_cis_hd_description'
+  $field_instances['node-cis_helpdesk_issue-field_cis_hd_description'] = array(
+    'bundle' => 'cis_helpdesk_issue',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 15,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_cis_hd_description',
+    'label' => 'Description',
+    'required' => 0,
+    'settings' => array(
+      'better_formats' => array(
+        'allowed_formats' => array(
+          'plain_text' => 'plain_text',
+          'student_work' => 0,
+          'textbook_editor' => 0,
+        ),
+        'allowed_formats_toggle' => 1,
+        'default_order_toggle' => 0,
+        'default_order_wrapper' => array(
+          'formats' => array(
+            'plain_text' => array(
+              'weight' => 10,
+            ),
+            'student_work' => array(
+              'weight' => 0,
+            ),
+            'textbook_editor' => array(
+              'weight' => -10,
+            ),
+          ),
+        ),
+      ),
+      'display_summary' => 0,
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'rows' => 5,
+        'summary_rows' => 5,
+      ),
+      'type' => 'text_textarea_with_summary',
+      'weight' => 11,
     ),
   );
 
@@ -634,7 +631,6 @@ general|General Question',
   // Translatables
   // Included for use with string extractors like potx.
   t('Any additional notes about resolving this issue');
-  t('Can you please describe the issue you are having?');
   t('Course');
   t('Description');
   t('Notes');

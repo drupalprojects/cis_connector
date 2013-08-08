@@ -54,8 +54,7 @@ function cis_helpdesk_issue_field_group_info() {
     'weight' => '1',
     'children' => array(
       0 => 'field_cis_hd_notes',
-      1 => 'field_cis_hd_resolved_by',
-      2 => 'field_cis_hd_status',
+      1 => 'field_cis_hd_status',
     ),
     'format_type' => 'fieldset',
     'format_settings' => array(

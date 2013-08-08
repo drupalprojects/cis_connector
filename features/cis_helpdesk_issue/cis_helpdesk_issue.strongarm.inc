@@ -14,7 +14,7 @@ function cis_helpdesk_issue_strongarm() {
   $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
   $strongarm->api_version = 1;
   $strongarm->name = 'additional_settings__active_tab_cis_helpdesk_issue';
-  $strongarm->value = 'edit-auto-nodetitle';
+  $strongarm->value = 'edit-comment';
   $export['additional_settings__active_tab_cis_helpdesk_issue'] = $strongarm;
 
   $strongarm = new stdClass();
@@ -37,6 +37,55 @@ function cis_helpdesk_issue_strongarm() {
   $strongarm->name = 'ant_php_cis_helpdesk_issue';
   $strongarm->value = 0;
   $export['ant_php_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_anonymous_cis_helpdesk_issue';
+  $strongarm->value = 0;
+  $export['comment_anonymous_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_cis_helpdesk_issue';
+  $strongarm->value = '0';
+  $export['comment_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_default_mode_cis_helpdesk_issue';
+  $strongarm->value = 0;
+  $export['comment_default_mode_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_default_per_page_cis_helpdesk_issue';
+  $strongarm->value = '10';
+  $export['comment_default_per_page_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_form_location_cis_helpdesk_issue';
+  $strongarm->value = 0;
+  $export['comment_form_location_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_preview_cis_helpdesk_issue';
+  $strongarm->value = '0';
+  $export['comment_preview_cis_helpdesk_issue'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'comment_subject_field_cis_helpdesk_issue';
+  $strongarm->value = 0;
+  $export['comment_subject_field_cis_helpdesk_issue'] = $strongarm;
 
   $strongarm = new stdClass();
   $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
