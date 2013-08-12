@@ -264,6 +264,7 @@ function cis_section_module_implements_alter(&$implementations, $hook) {
  * Create accounts, groups, and associate to groups.
  */
 function _cis_section_create_accounts($roster) {
+  $actual = array();
   // loop through sections in the overall access roster
   foreach ($roster as $section => $members) {
     // loop through the user / role combination
@@ -331,7 +332,12 @@ function _cis_section_create_accounts($roster) {
     // they gain past student
     $student = user_role_load_by_name(CIS_SECTION_STUDENT);
     $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
-    $current = _cis_section_load_users_by_gid($gid, $student->rid);
+    if (isset($gid)) {
+      $current = _cis_section_load_users_by_gid($gid, $student->rid);
+    }
+    else {
+      $current = array();
+    }
     // find users that no longer came across
     $diff = array_diff($current, $actual);
     foreach ($diff as $uid) {
