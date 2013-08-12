@@ -2,7 +2,7 @@
 /**
  * Implements hook_set_cis_service_data().
  * delta is a portion of the syncronization routine
- * Common values are initial and interval
+ * Common values are initial, interval, weekly, monthly, yearly
  * New deltas can be added through custom code routines
  */
 function hook_set_cis_service_data($delta) {

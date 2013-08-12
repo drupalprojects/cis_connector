@@ -214,15 +214,19 @@ function _cis_service_connection_page($request) {
  */
 function cis_service_connection_cron() {
   $frequency = variable_get('cis_service_connection_sync_frequency', CIS_SERVICE_CONNECTION_SYNC_FREQUENCY);
-  $interval = 86400 * $frequency;
+  $interval['interval'] = 86400 * $frequency;
+  $interval['weekly'] = 86400 * 7 * $frequency;
+  $interval['monthly'] = 86400 * 28 * $frequency;
+  $interval['yearly'] = 86400 * 365 * $frequency;
   // if last sync isn't set this is the first cron run
   if (variable_get('cis_service_connection_last_sync', 0) == 0) {
     // perform the initial setup routine
     // this will help bind the CIS to this instance of the service
     _cis_service_connection_initial_cis_bind();
   }
+  
   // if last sync is less then the update interval, update
-  if ((REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval) {
+  if ((REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval['interval']) {
     // select the service instance in question based on uuid
     $select = array(
       'type' => 'service_instance',
@@ -234,6 +238,23 @@ function cis_service_connection_cron() {
       _cis_connection_set_data($select, $data);
     }
     variable_set('cis_service_connection_last_sync', REQUEST_TIME);
+  }
+  // weekly sync
+  if ((REQUEST_TIME - variable_get('cis_service_connection_weekly_last_sync', 0)) > $interval['weekly']) {
+    $data = module_invoke_all('set_cis_service_data', 'weekly');
+    variable_set('cis_service_connection_weekly_last_sync', REQUEST_TIME);
+  }
+  // monthly sync
+  if ((REQUEST_TIME - variable_get('cis_service_connection_monthly_last_sync', 0)) > $interval['monthly']) {
+    $data = module_invoke_all('set_cis_service_data', 'monthly');
+    // get the latest footer copy language
+    cis_service_connection_get_footer_language();
+    variable_set('cis_service_connection_monthly_last_sync', REQUEST_TIME);
+  }
+  // yearly sync
+  if ((REQUEST_TIME - variable_get('cis_service_connection_yearly_last_sync', 0)) > $interval['yearly']) {
+    $data = module_invoke_all('set_cis_service_data', 'yearly');
+    variable_set('cis_service_connection_yearly_last_sync', REQUEST_TIME);
   }
   // clear cached versions of section queries regardless of condition
   _cis_connector_cache_clear();

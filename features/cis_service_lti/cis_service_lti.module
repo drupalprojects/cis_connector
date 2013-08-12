@@ -15,9 +15,9 @@ function _cis_service_lti_get_consumer() {
     //$address = _cis_connector_format_address($settings);
     $address = $settings['protocol'] . '://' . $settings['address'];
   }
-	if (!$settings) {
-		return FALSE;
-	}
+  if (!$settings) {
+    return FALSE;
+  }
   $query = array(
     'lti_tool_provider_consumer_consumer' => $address,
   );
