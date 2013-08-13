@@ -6,6 +6,12 @@ define ('CIS_CONNECTOR_ENTITY_BOTH', 0);
 define ('CIS_CONNECTOR_ENTITY_REMOTE_ONLY', 1);
 
 /**
+ * Implements hook_restws_meta_controls_alter().
+ */
+function cis_connector_restws_meta_controls_alter(&$controls) {
+  $controls['deep-load-refs'] = 'deep-load-refs';
+}
+/**
  * Build the registry of educational connectors
  */
 function _cis_connector_build_registry($component = NULL) {
