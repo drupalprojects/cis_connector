@@ -223,6 +223,8 @@ function cis_service_connection_cron() {
     // perform the initial setup routine
     // this will help bind the CIS to this instance of the service
     _cis_service_connection_initial_cis_bind();
+    // if initial bind then end early
+    return TRUE;
   }
   
   // if last sync is less then the update interval, update
