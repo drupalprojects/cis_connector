@@ -249,18 +249,6 @@ function cis_section_state_change($node, $state = 'activate') {
 }
 
 /**
- * Implements hook_module_implements_alter().
- */
-function cis_section_module_implements_alter(&$implementations, $hook) {
-  // attempt to move this to the last thing to fire
-  if ($hook == 'cron') {
-    $group = $implementations['cis_section'];
-    unset($implementations['cis_section']);
-    $implementations['cis_section'] = $group;
-  }
-}
-
-/**
  * Create accounts, groups, and associate to groups.
  */
 function _cis_section_create_accounts($roster) {
