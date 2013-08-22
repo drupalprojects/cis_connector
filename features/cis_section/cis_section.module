@@ -265,7 +265,6 @@ function _cis_section_create_accounts($roster) {
           'name' => $name,
           'pass' => user_password(20),
           'status' => 1,
-          'init' => $email,
           'roles' => array(
             DRUPAL_AUTHENTICATED_RID => 'authenticated user',
             $role->rid => $role->name,
