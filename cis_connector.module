@@ -675,9 +675,9 @@ function cis_connector_form_field_ui_field_edit_form_alter(&$form, &$form_state)
 }
 
 /**
- * Implements hook_entity_insert().
+ * Implements hook_entity_presave().
  */
-function cis_connector_entity_insert($entity, $type) {
+function cis_connector_entity_presave($entity, $type) {
   // only run this when it's our form deployed remotely
   $info = entity_get_info($type);
   // ensure we have bundle keys at least after loading info
@@ -703,7 +703,11 @@ function cis_connector_entity_insert($entity, $type) {
         }
         // our save mode told us to remove the current one
         if ($item['save'] == CIS_CONNECTOR_ENTITY_REMOTE_ONLY) {
-          entity_delete($type, $entity->nid);
+          // try to wipe the entity and hope it doesn't cause an issue
+          $entity = NULL;
+          // TODO: May need to issue drupal_goto to truly
+          // hijack the operation. look into running this hook
+          // last to avoid possible issues with other projects
         }
       }
     }
