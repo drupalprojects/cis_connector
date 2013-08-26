@@ -683,6 +683,16 @@ function cis_connector_entity_presave($entity, $type) {
   // ensure we have bundle keys at least after loading info
   if (isset($info['bundle keys']['bundle']) && isset($entity->{$info['bundle keys']['bundle']})) {
     $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
+    // TODO: this appears to be a glitch in RestWS
+    // How could an item be submitted as annonymous if the user isn't?
+
+    // don't allow annonymous submissions from outside system
+    // this applies at the moment for service account based items
+    // this is the only role able to post in this manner
+    // but we verify this anyway based on role
+    if (count($rem) > 0 && $entity->uid == 0 && in_array('SERVICE ACCOUNT', $GLOBALS['user']->roles)) {
+      $entity->uid = $GLOBALS['user']->uid;
+    }
     // if we have at least 1 match, add the settings, otherwise never runs
     foreach ($rem as $key => $item) {
       // make sure this isn't the current bucket we are working in
@@ -708,30 +718,6 @@ function cis_connector_entity_presave($entity, $type) {
           // TODO: May need to issue drupal_goto to truly
           // hijack the operation. look into running this hook
           // last to avoid possible issues with other projects
-        }
-      }
-    }
-  }
-}
-
-/**
- * Implements hook_entity_presave().
- */
-function cis_connector_entity_presave($entity, $type) {
-  // only run this when it's our form deployed remotely
-  $info = entity_get_info($type);
-  if (isset($info['bundle keys']['bundle']) && isset($entity->{$info['bundle keys']['bundle']})) {
-    $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
-    if (count($rem) > 0) {
-      $item = array_pop($rem);
-      // if we have at least 1 match, bother to test
-      if (in_array(variable_get('install_profile', ''), $item['buckets'])) {
-        // don't allow annonymous submissions from outside system
-        // this applies at the moment for service account based items
-        // this is the only account able to post in this manner
-        // but we verify this anyway based on role
-        if ($entity->uid == 0 && in_array('SERVICE ACCOUNT', $GLOBALS['user']->roles)) {
-          $entity->uid = $GLOBALS['user']->uid;
         }
       }
     }
