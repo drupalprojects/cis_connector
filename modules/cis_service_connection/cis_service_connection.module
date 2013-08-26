@@ -226,6 +226,25 @@ function cis_service_connection_cron() {
     // if initial bind then end early
     return TRUE;
   }
+  // see if this is just beyond the initial run
+  if (variable_get('cis_service_connection_initial', FALSE)) {
+    // select the instance uuid
+    $select = array(
+      'type' => 'service_instance',
+      'uuid' => variable_get('cis_service_instance_uuid', ''),
+    );
+    // cron key is critical that its set this needs to happen
+    // on a second pass running of local cron this is because
+    // during installation we might not have a connection to
+    // the CIS established based on install order.
+    $data = array(
+      'field_cron_key' => variable_get('cron_key', ''),
+    );
+    // set the data in the CIS
+    _cis_connection_set_data($select, $data);
+    // delete this variable so this doesn't run ever again
+    variable_del('cis_service_connection_initial');
+  }
   
   // if last sync is less then the update interval, update
   if ((REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval['interval']) {
@@ -304,22 +323,8 @@ function _cis_service_connection_initial_cis_bind() {
   cis_service_connection_get_footer_language();
   // set last sync time
   variable_set('cis_service_connection_last_sync', REQUEST_TIME);
-}
-
-/**
- * Implements hook_set_cis_service_data().
- */
-function cis_service_connection_set_cis_service_data($delta) {
-  $data = array();
-  switch ($delta) {
-    case 'initial':
-      // only set cron key on the first time this runs against a service
-      $data = array(
-        'field_cron_key' => variable_get('cron_key', ''),
-      );
-    break;
-  }
-  return $data;
+  // set this to say initial happened but we may need to do it again
+  variable_set('cis_service_connection_initial', TRUE);
 }
 
 /**
