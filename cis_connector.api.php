@@ -34,3 +34,21 @@ function hook_cis_service_registry_alter(&$registry) {
   // divert to a different connection address on a specific site
   $registry['cis']['address'] = 'www.example2.com';
 }
+
+/**
+ * Implements hook_cis_connector_instance_alter().
+ * alter the base_path() to formulate the instance location
+ */
+function hook_cis_connector_instance_alter(&$instance) {
+  $instance = str_replace('/courses/', $instance);
+}
+
+/**
+ * Implements hook_cis_connector_remote_save_data_alter().
+ * Modify data that's saved in the remote save module prior
+ * to sending it off to that site.  This is good for edge cases.
+ */
+function hook_cis_connector_remote_save_data(&$data) {
+  // automatically set the summary to 200 chars
+  $data['body']['summary'] = drupal_substr($data['body']['value'], 0, 200);
+}
