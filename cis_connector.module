@@ -1,28 +1,17 @@
 <?php
-// this is a kill switch to force all calls to be uncached
 // trigger this when testing and debugging calls
 define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
 define ('CIS_CONNECTOR_ENTITY_BOTH', 0);
 define ('CIS_CONNECTOR_ENTITY_REMOTE_ONLY', 1);
 
 /**
- * Implements hook_restws_meta_controls_alter().
- */
-function cis_connector_restws_meta_controls_alter(&$controls) {
-  $controls['deep-load-refs'] = 'deep-load-refs';
-}
-/**
  * Build the registry of educational connectors
  */
 function _cis_connector_build_registry($component = NULL) {
-  // statically cache future calls
-  $settings = &drupal_static(__FUNCTION__ . $component);
-  if (!isset($settings)) {
-    // invoke special hook for registry settings
-    $settings = module_invoke_all('cis_service_registry');
-    // follows best practice of drupal but only provided for future override potential
-    drupal_alter('cis_service_registry', $settings);
-  }
+  // invoke special hook for registry settings
+  $settings = module_invoke_all('cis_service_registry');
+  // follows best practice of drupal but only provided for future override potential
+  drupal_alter('cis_service_registry', $settings);
   if (!is_null($component)) {
     // validate that this component exists
     if (isset($settings[$component])) {
@@ -49,7 +38,7 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
   }
   // allow for PUT requests which require use of the data property
   if (!empty($data)) {
-    $options['data'] = drupal_json_encode($data);
+    $options['data'] = drupal_to_js($data);
     $options['headers'] = array('Content-Type' => 'application/json');
   }
   // build the call
@@ -78,7 +67,7 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
     // parse format correctly for return if we can
     switch ($format) {
       case 'json':
-        $data = drupal_json_decode($response->data);
+        $data = json_decode($response->data, TRUE);
       break;
       case 'xml':
         $data = simplexml_load_string($response->data);
@@ -137,7 +126,7 @@ function _cis_connection_query($query = array(), $entity_type = 'node', $format 
     // parse format correctly for return if we can
     switch ($format) {
       case 'json':
-        $data = drupal_json_decode($response->data);
+        $data = json_decode($response->data, TRUE);
       break;
       case 'xml':
         $data = simplexml_load_string($response->data);
@@ -177,265 +166,6 @@ function _cis_connector_real_address($path) {
 }
 
 /**
- * Returns the user's section context from their group / global
- */
-function _cis_connector_section_context($account = NULL) {
-  // statically cache future calls
-  $section = &drupal_static(__FUNCTION__);
-  if (!isset($section)) {
-    // check for global session override
-    if (isset($_SESSION['cis_section_context'])) {
-      return $_SESSION['cis_section_context'];
-    }
-    // use current user if acount is not set
-    if (empty($account)) {
-      global $user;
-      $account = $user;
-    }
-    // attempt to grab og context, rare but possible
-    $group = og_context();
-    if (isset($group['gid'])) {
-      $group = node_load($group['gid']);
-    }
-    else {
-      // load groups they are part of
-      $groups = og_get_entity_groups('user', $account);
-      if (!empty($groups['node'])) {
-        $group = node_load(array_pop($groups['node']));
-      }
-    }
-    // ensure section is set
-    if (isset($group->field_section_id) && is_array($group->field_section_id[LANGUAGE_NONE])) {
-      // pull out the section value if available
-      $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
-    }
-    else {
-      // TODO: should probably have better handling as to what the default is
-      // essentially group / section this is an error when running this
-      $section = 'default';
-    }
-  }
-  return $section;
-}
-
-/**
- * Callback to return structured data
- *
- * This is for some commonly requested things that may take multiple queries to accomplish
- */
-function _cis_connector_transaction($request, $format = 'default', $query = array(), $section = NULL) {
-  // return false if we don't match a request
-  $output = FALSE;
-  // grab section context of the user
-  if (is_null($section)) {
-    $section = _cis_connector_section_context();
-  }
-  // form the commonly used base query
-  $base_query = array('field_access_string' => $section, 'archived' => 0);
-  // process request
-  switch ($request) {
-    case 'section':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // return the whole section array
-      $output = $cis_section_item['list'][0];
-    break;
-    case 'contact_info':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // return an array with input format and textual content of contact info
-      $output = $cis_section_item['list'][0]['field_contact_info'];
-    break;
-    case 'other_services':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // return the whole section array
-      $section_object = $cis_section_item['list'][0];
-      // check for services defined
-      if (isset($section_object['field_services']) && is_array($section_object['field_services'])) {
-        // walk each service requesting details
-        foreach ($section_object['field_services'] as $key => $service_field) {
-          $query = array(
-            'status' => 1,
-              'nid' => $service_field['id'],
-          );
-          // query the service object
-          $service_object = _cis_connection_query($query, $service_field['resource']);
-          // hold onto the objects
-          $output[$key] = $service_object['list'][0];    
-        }
-      }
-    break;
-    case 'help':
-    case 'guided_tour':
-    case 'resources':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // make sure it got data
-      if (!empty($cis_section_item)) {
-        $list = '';
-        if ($request == 'resources') {
-          // display related services prior to other resources
-          $services = _cis_connector_transaction('other_services');
-          // make sure this is actually using other services
-          if (is_array($services)) {
-             // render each service return item
-             foreach ($services as $service) {
-               $list .= '<h2>' . $service['title'] . '</h2>' . "\n";
-               $list .= '<div>' . $service['body']['value'] . "\n";
-               $list .= l(t('Access the @title service', array('@title' => $service['title'])), $service['field_location']['url'] . base_path()) . '</div>' . "\n";
-             }
-          }
-          // loop through resources associated to build their info
-          foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
-            $resource = _cis_connection_object($reid['id'], $reid['resource']);
-            $list .= '<h2>' . $resource['title'] . '</h2>';
-            $list .= $resource['body']['value'];
-          }
-        }
-        // request the standard resource language
-        $query = array('type' => 'resource', 'field_machine_name' => $request . '_page');
-        $resource_page = _cis_connection_query($query);
-        // render text applying the input filter requested
-        $resource_page['list'][0]['body']['value'] .= $list;
-        // send the text with format for processing
-        $output = $resource_page['list'][0]['body'];
-      }
-    break;
-    case 'section_dates':
-      $query = $base_query;
-      // request the section of the user, always uncached
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item', 'json', 'GET', 'cis', '', FALSE);
-      // pull back access duration
-      $dates = $cis_section_item['list'][0]['field_access_dates'];
-      // pull back the date class officially begins
-      $class_begin = $cis_section_item['list'][0]['field_course_start'];
-      // return access start and end timestamps
-      $output = array('start' => $dates['value'], 'class_begin' => $class_begin, 'end' => $dates['value2']);
-    break;
-    case 'activation_code':
-      // request the code input by the user
-      $codes = _cis_connection_query($query, 'activation_code');
-      // ensure we found 1 code
-      if (count($codes['list']) == 1) {
-        $code = $codes['list'][0];
-        global $user;
-        // verify this was never used before
-        if ($code['used'] == 0 && $code['name'] == '' && $code['granted'] == '') {        
-          $query = array('used' => REQUEST_TIME, 'name' => $user->name, 'granted' => str_replace('/', '', base_path()));
-          // internal code id to query against path for update
-          _cis_connection_object($code['acid'], 'activation_code', NULL, 'PUT', $query);
-          // TRUE
-          $output = ACTIVATION_CODE_ACCESS_GRANT;
-        }
-        // edge case where system revoked their access incorrectly
-        // this helps improve integrity if a roster sync is inaccurate
-        if ($code['used'] != 0 && $code['name'] == $user->name && $code['granted'] == str_replace('/', '', base_path())) {
-          $output = ACTIVATION_CODE_ACCESS_GRANT;
-        }
-        else {
-          // a different user already used this code
-          if ($code['name'] != $user->name) {
-            drupal_set_message(t('Another user already used this code! ECODE: REUSE'), 'error');
-          }
-          else {
-            // user has tried to use a valid code again; in a different course
-            drupal_set_message(t('This code has been used already to unlock access in another course! ECODE: OTHER'), 'error');
-          }
-          $output = ACTIVATION_CODE_ACCESS_DENY;
-        }
-      }
-      else {
-        $output = ACTIVATION_CODE_ACCESS_DENY;
-      }
-    break;
-    case 'welcome_page':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      $output = '';
-      if (!empty($cis_section_item)) {
-        // make sure a file was uploaded for this request
-        if (isset($cis_section_item['list'][0]['field_welcome_page']['value'])) {
-          $output = check_markup($cis_section_item['list'][0]['field_welcome_page']['value'], $cis_section_item['list'][0]['field_welcome_page']['format']);
-        }
-        else {
-          // request the standard language if we don't have custom
-          $query = array('type' => 'resource', 'field_machine_name' => 'field_welcome_letter');
-          $resource = _cis_connection_query($query);
-          // render text applying the input filter requested
-          $output = check_markup($resource['list'][0]['body']['value'], $resource['list'][0]['body']['format']);
-        }
-        // see if there's a welcome letter to append
-        if (isset($cis_section_item['list'][0]['field_welcome_letter'])) {
-          $file = _cis_connection_object($cis_section_item['list'][0]['field_welcome_letter']['file']['id'], 'file');
-          // append a download link
-          $output .= l(t('Download @request (PDF)', array('@request' => drupal_ucfirst('welcome_letter'))), $file['url']);
-        }
-      }
-    break;
-    case 'welcome_letter':
-    case 'syllabus':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // make sure it got data
-      if (!empty($cis_section_item)) {
-        // make sure a file was uploaded for this request
-        if (isset($cis_section_item['list'][0]['field_' . $request])) {
-          $file = _cis_connection_object($cis_section_item['list'][0]['field_' . $request]['file']['id'], 'file');
-        }
-        // if a url is set we have a file
-        if (isset($file['url'])) {
-          // return the file as a download
-          if ($format == 'download') {
-            // return the file via direct http call
-            $options = array();
-            $file_contents = _cis_connector_request(_cis_connector_real_address($file['url']), $options, 'none', FALSE);
-            // set the content type to the file returned info
-            drupal_add_http_header('Content-type', $file['mime']);
-            // set the filename to the file returned info
-            drupal_add_http_header('Content-Disposition', 'attachment; filename="' . $file['name'] . '"');
-            // prompt headers for file download
-            drupal_send_headers();
-            // write the data of the request to the screen
-            print $file_contents->data;
-            exit;
-          }
-          else {
-            // request the standard language
-            $query = array('type' => 'resource', 'field_machine_name' => $request);
-            $resource = _cis_connection_query($query);
-            // render text applying the input filter requested
-            $output = check_markup($resource['list'][0]['body']['value'], $resource['list'][0]['body']['format']);
-            // append a download link
-            $output .= l(t('Download @request (PDF)', array('@request' => drupal_ucfirst($request))), _cis_connector_real_address($file['url']));
-          }
-        }
-        else {
-          // file wasn't found
-          $output = t('Please request a copy of the "@request" from your instructor', array('@request' => str_replace('_', ' ', $request)));
-        }
-      }
-      else {
-        $output = t('You must be enrolled in this course in order to view the @request', array('@request' => $request));
-      }
-    break;
-  }
-  return $output;
-}
-
-/**
  * Wrapper for http requests to enable cached requests
  */  
 function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cached = TRUE) {
@@ -462,39 +192,28 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
   }
   // generate a unique call signature
   $call = __FUNCTION__ . implode('_', $args);
-  // statically cache future calls
-  $data = &drupal_static($call);
-  if (!isset($data)) {
-    // convert to something db friendly
-    $salt = drupal_get_hash_salt();
-    $cid = hash('sha512', $salt . $call);
-    if ($cached && ($cache = cache_get($cid, 'cache_cis_connector'))) {
-      $data = $cache->data; 
-    }
-    else {
-      // allow for direct http requests
-      if ($bucket == 'none') {
-        // queue request
-        httprl_request($url, $options);
-        // send the request off
-        $tmp = httprl_send_request();
-        $data = array_pop($tmp);
-      }
-      // look for settings for this bucket
-      else if ($settings = _cis_connector_build_registry($bucket)) {
-        $address = _cis_connector_format_address($settings);
-        // queue the request
-        httprl_request($address . '/' . $url, $options);
-        // send the request off
-        $tmp = httprl_send_request();
-        $data = array_pop($tmp);
-      }
-      else {
-        drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
-        return FALSE;
-      }
-      cache_set($cid, $data, 'cache_cis_connector');
-    }
+  // convert to something db friendly
+  $cid = hash('sha512', $call);
+  // allow for direct http requests
+  if ($bucket == 'none') {
+    // queue request
+    httprl_request($url, $options);
+    // send the request off
+    $tmp = httprl_send_request();
+    $data = array_pop($tmp);
+  }
+  // look for settings for this bucket
+  else if ($settings = _cis_connector_build_registry($bucket)) {
+    $address = _cis_connector_format_address($settings);
+    // queue the request
+    httprl_request($address . '/' . $url, $options);
+    // send the request off
+    $tmp = httprl_send_request();
+    $data = array_pop($tmp);
+  }
+  else {
+    drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
+    return FALSE;
   }
   // easiest way of debugging all calls
   /*global $user;
@@ -502,62 +221,6 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
     dpm($data);
   }*/
   return $data;  
-}
-
-/**
- * Invalidates cached data relating to cis_connector.
- *
- * @param $cid
- *   (optional) Cache ID of the record to clear from the private update module
- *   cache. If empty, all records will be cleared from the table except fetch
- *   tasks. Defaults to NULL.
- * @param $wildcard
- *   (optional) If TRUE, cache IDs starting with $cid are deleted in addition to
- *   the exact cache ID specified by $cid. Defaults to FALSE.
- */
-function _cis_connector_cache_clear($cid = NULL, $wildcard = FALSE) {
-  if (empty($cid)) {
-    db_delete('cache_cis_connector')->execute();
-  }
-  else {
-    $query = db_delete('cache_cis_connector');
-    if ($wildcard) {
-      $query->condition('cid', $cid . '%', 'LIKE');
-    }
-    else {
-      $query->condition('cid', $cid);
-    }
-    $query->execute();
-  }
-}
-
-/**
- * Implements hook_flush_caches().
- */
-function cis_connector_flush_caches() {
-  _cis_connector_cache_clear();
-  return array();
-}
-
-/**
- * Implements hook_admin_menu_cache_info().
- */
-function cis_connector_admin_menu_cache_info() {
-  $caches['cis_connector'] = array(
-    'title' => t('CIS Data'),
-    'callback' => '_cis_connector_cache_clear',
-  );
-  return $caches;
-}
-
-/**
- * Implements hook_views_api().
- */
-function cis_connector_views_api() {
-  return array(
-    'api' => 3,
-    'path' => drupal_get_path('module', 'cis_connector'),
-  );
 }
 
 /**
@@ -633,45 +296,6 @@ function _cis_connector_remote_entities($type = NULL, $bundle = NULL) {
     $remote = $items;
   }
   return $remote;
-}
-
-/**
- * Implements hook_field_info_alter().
- */
-function cis_connector_field_info_alter(&$info) {
-  // Add a setting to all field types
-  foreach ($info as $field_type => $field_type_info) {
-    $info[$field_type]['settings'] += array(
-      'cis_connector_access' => FALSE,
-      'cis_connector_disable' => FALSE,
-    );
-  }
-}
-
-/**
- * Implements hook_form_FORMID_alter().
- * Adds settings for controlling how fields are handled for remote entities
- */
-function cis_connector_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
-  // check if this entity is allowed to utilize this method
-  $rem = _cis_connector_remote_entities($form['instance']['entity_type']['#value'], $form['instance']['bundle']['#value']);
-  // if we have at least 1 match, add the settings
-  if (count($rem) != 0) {
-    // allow for blocking the field display based on being remote
-    $form['field']['settings']['cis_connector_access'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Hide field on remote instance'),
-      '#default_value' => !empty($form['#field']['settings']['cis_connector_access']),
-      '#description' => t('If checked, this field will be removed from the form when displayed on a remote site'),
-    );
-    // show field but disable it based on being remote
-    $form['field']['settings']['cis_connector_disable'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Disable field on remote instance'),
-      '#default_value' => !empty($form['#field']['settings']['cis_connector_disable']),
-      '#description' => t('If checked, this field will be disabled but still visible on the form when displayed on a remote site'),
-    );
-  }
 }
 
 /**
