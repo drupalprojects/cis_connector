@@ -1,0 +1,5 @@
+name = CIS Connector Remote Save
+description = Make sure that any node saved here is also saved into the new remote source for the MOOC distribution.  This requires the same connection credentials as your D7 stack to build out systems and communicate.
+core = 6.x
+package = CIS
+dependencies[] = uuid

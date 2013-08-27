@@ -1,0 +1,31 @@
+<?php
+define ('CIS_CONNECTOR_REMOTE_BUCKET', 'mooc');
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function cis_connector_remote_save_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+    case 'insert':
+    case 'update':
+    case 'delete':
+      // ship this off in these situations
+      _cis_connector_remote_save_op($node, $op);
+    break;
+  }
+}
+
+/**
+ * Callback to modify a node on a remote service based on local save.
+ */
+function _cis_connector_remote_save_op($node, $op) {
+  // prepare the item for shipment
+  $data = _cis_connection_prepare_entity($node);
+  // post the formatted object to the other address
+  $instance = '';
+  $settings = _cis_connector_build_registry(CIS_CONNECTOR_REMOTE_BUCKET);
+  if ($settings['instance']) {
+    $instance = str_replace('/', '', base_path()) . '/';
+  }
+  $return = _cis_connection_object(NULL, $type, NULL, 'POST', $data, $bucket, $instance, '', $item['options']);
+}
