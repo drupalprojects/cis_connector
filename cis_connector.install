@@ -1,8 +1,0 @@
-<?php
-/**
- * Implements hook_schema().
- */
-function cis_connector_schema() {
-  $schema['cache_cis_connector'] = drupal_get_schema_unprocessed('system', 'cache');
-  return $schema;
-}
