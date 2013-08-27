@@ -1,8 +1,4 @@
 <?php
-// trigger this when testing and debugging calls
-define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
-define ('CIS_CONNECTOR_ENTITY_BOTH', 0);
-define ('CIS_CONNECTOR_ENTITY_REMOTE_ONLY', 1);
 
 /**
  * Build the registry of educational connectors
@@ -29,7 +25,7 @@ function _cis_connector_build_registry($component = NULL) {
 /**
  * Wrapper for structured calls against CIS system
  */
-function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis', $instance = '', $cache = TRUE, $extra = '', $call_options = NULL) {
+function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis', $instance = '', $extra = '', $call_options = NULL) {
   // invoke special hook for registry settings
   // options for method
   $options = array('method' => $method);
@@ -53,14 +49,7 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
   if (!empty($extra)) {
     $call .= '?' . $extra;
   }
-  // generate the well structured request
-  if ($method == 'PUT' || $method == 'POST') {
-    // PUT can not be cached
-    $response = _cis_connector_request($call, $options, $bucket, FALSE);
-  }
-  else {
-    $response = _cis_connector_request($call, $options, $bucket, $cache);
-  }
+  $response = _cis_connector_request($call, $options, $bucket);
   // ensure a response to connect in the first place
   $data = FALSE;
   if ($response) {
@@ -99,10 +88,10 @@ function _cis_connection_set_data($select, $data) {
 /**
  * Wrapper for structured queries against matching CIS services
  */
-function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 'node', $query = array(), $cached = TRUE) {
+function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 'node', $query = array()) {
   // abstract a related sub-service, this will just remove the / if base-path is root
   $path = substr(base_path(), 1);
-  $result = _cis_connection_query($query, $entity_type, 'json', 'GET', $bucket, $path, $cached);
+  $result = _cis_connection_query($query, $entity_type, 'json', 'GET', $bucket, $path);
   // return items if any were found
   if (isset($result['list'])) {
     return $result['list'];
@@ -113,13 +102,13 @@ function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 
 /**
  * Wrapper for structured queries against CIS system
  */
-function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET', $bucket = 'cis', $instance = '', $cached = TRUE) {
+function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET', $bucket = 'cis', $instance = '') {
   // options for method
   $options = array('method' => $method);
   // build the call
   $call = $instance . $entity_type . '.' . $format . '?' . http_build_query($query);
   // generate the well structured request
-  $response = _cis_connector_request($call, $options, $bucket, $cached);
+  $response = _cis_connector_request($call, $options, $bucket);
   // ensure a response to connect in the first place
   $data = FALSE;
   if ($response) {
@@ -166,16 +155,10 @@ function _cis_connector_real_address($path) {
 }
 
 /**
- * Wrapper for http requests to enable cached requests
+ * Wrapper for http requests
  */  
-function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cached = TRUE) {
+function _cis_connector_request($url, $options = array(), $bucket = 'cis') {
   $data = FALSE;
-  // developers: allow for debug of all calls with fresh values
-  // user 1 is always uncached
-  global $user;
-  if (CIS_CONNECTOR_DEVELOPMENT || $user->uid == 1) {
-    $cached = FALSE;
-  }
   // trick to mash request into a single item
   $args = func_get_args();
   // options can be an array so need to implode on its own
@@ -224,19 +207,6 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
 }
 
 /**
- * Access callback for user roles.
- */
-function cis_connector_role_access($roles) {
-  global $user;
-  foreach ($roles as $role) {
-    if (in_array($role, $user->roles)) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
-
-/**
  * Prepare an entity for transmission to a webservice
  * This primary involves "crushing" the item into an array
  */
@@ -267,110 +237,4 @@ function _cis_connection_prepare_entity($entity) {
     }
   }
   return $ary;
-}
-
-/**
- * Collect all remote entities for sending off items to other buckets.
- */
-function _cis_connector_remote_entities($type = NULL, $bundle = NULL) {
-  $items = module_invoke_all('cis_connected_entity');
-  drupal_alter('cis_connected_entity', $items);
-  $remote = array();
-  // allow for filtering just to a certain type
-  if (!is_null($type)) {
-    foreach ($items as $key => $item) {
-      if ($item['type'] == $type) {
-        // see if we should filter to bundles in this type
-        if (!is_null($bundle)) {
-          if ($item['bundle'] == $bundle) {
-            $remote[$key] = $item;
-          }
-        }
-        else {
-          $remote[$key] = $item;
-        }
-      }
-    }
-  }
-  else {
-    $remote = $items;
-  }
-  return $remote;
-}
-
-/**
- * Implements hook_entity_presave().
- */
-function cis_connector_entity_presave($entity, $type) {
-  // only run this when it's our form deployed remotely
-  $info = entity_get_info($type);
-  // ensure we have bundle keys at least after loading info
-  if (isset($info['bundle keys']['bundle']) && isset($entity->{$info['bundle keys']['bundle']})) {
-    $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
-    // TODO: this appears to be a glitch in RestWS
-    // How could an item be submitted as annonymous if the user isn't?
-
-    // don't allow annonymous submissions from outside system
-    // this applies at the moment for service account based items
-    // this is the only role able to post in this manner
-    // but we verify this anyway based on role
-    if (count($rem) > 0 && $entity->uid == 0 && in_array('SERVICE ACCOUNT', $GLOBALS['user']->roles)) {
-      $entity->uid = $GLOBALS['user']->uid;
-    }
-    // if we have at least 1 match, add the settings, otherwise never runs
-    foreach ($rem as $key => $item) {
-      // make sure this isn't the current bucket we are working in
-      if (!in_array(variable_get('install_profile', ''), $item['buckets'])) {
-        // prepare the item for shipment
-        $data = _cis_connection_prepare_entity($entity);
-        // execute call
-        foreach ($item['buckets'] as $bucket) {
-          // post the formatted object to the other address
-          $instance = '';
-          $settings = _cis_connector_build_registry($bucket);
-          if ($settings['instance']) {
-            $instance = str_replace('/', '', base_path()) . '/';
-          }
-          $return = _cis_connection_object(NULL, $type, NULL, 'POST', $data, $bucket, $instance, FALSE, '', $item['options']);
-          // if non-blocking this won't have anything it can do but still..
-          drupal_alter('cis_remote_entities_insert', $return, $bucket);
-        }
-        // our save mode told us to remove the current one
-        if ($item['save'] == CIS_CONNECTOR_ENTITY_REMOTE_ONLY) {
-          // try to wipe the entity and hope it doesn't cause an issue
-          $entity = NULL;
-          // TODO: May need to issue drupal_goto to truly
-          // hijack the operation. look into running this hook
-          // last to avoid possible issues with other projects
-        }
-      }
-    }
-  }
-}
-
-/**
- * Implements hook_form_alter().
- */
-function cis_connector_form_alter(&$form, &$form_state, $form_id) {
-  // only run this on entity forms
-  if (isset($form['#entity_type']) && isset($form['#bundle'])) {
-    // look for remote entities structured for this entity / bundle pair
-    $rem = _cis_connector_remote_entities($form['#entity_type'], $form['#bundle']);
-    // pop off the 1 we have as this is specific
-    $item = array_pop($rem);
-    // test for entity form and not in a bucket we write to
-    if ($form_id == $item['bundle'] . '_' . $item['type'] . '_' . 'form' && !in_array(variable_get('install_profile', ''), $item['buckets'])) {
-      // search fields on external instance and modify settings when needed
-      foreach ($form_state['field'] as $field_name => $field) {
-        if ($field['und']['field']['settings']['cis_connector_access']) {
-          // remove access to this field entirely
-          $form[$field_name]['#access'] = FALSE;
-        }
-        if ($field['und']['field']['settings']['cis_connector_disable']) {
-          // remove ability to edit to these field instances
-          $form[$field_name]['und']['#disabled'] = TRUE;
-        }
-      }
-    }
-  }
 }
