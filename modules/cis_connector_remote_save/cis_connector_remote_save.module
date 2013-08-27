@@ -6,9 +6,10 @@ define ('CIS_CONNECTOR_REMOTE_BUCKET', 'mooc');
  */
 function cis_connector_remote_save_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   switch ($op) {
-    case 'insert':
+    // right now we only support updating things after the fact
     case 'update':
-    case 'delete':
+      // make sure we have the UUID present
+      $node = (object) array_merge((array) $node, uuid_node_load($node));
       // ship this off in these situations
       _cis_connector_remote_save_op($node, $op);
     break;
@@ -18,14 +19,27 @@ function cis_connector_remote_save_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) 
 /**
  * Callback to modify a node on a remote service based on local save.
  */
-function _cis_connector_remote_save_op($node, $op) {
+function _cis_connector_remote_save_op($node, $op, $bucket = CIS_CONNECTOR_REMOTE_BUCKET) {
   // prepare the item for shipment
   $data = _cis_connection_prepare_entity($node);
   // post the formatted object to the other address
   $instance = '';
-  $settings = _cis_connector_build_registry(CIS_CONNECTOR_REMOTE_BUCKET);
+  $settings = _cis_connector_build_registry($bucket);
   if ($settings['instance']) {
-    $instance = str_replace('/', '', base_path()) . '/';
+    $instance = cis_connector_get_base();
   }
-  $return = _cis_connection_object(NULL, $type, NULL, 'POST', $data, $bucket, $instance, '', $item['options']);
+  // set the log message for this node update to be this site
+  $data['log'] = t('This update has come from @adr', array('@adr' => $_SERVER['HTTP_REFERER']));
+  // select on the UUID since this is the only assured ID to be the same
+  $select = array('uuid' => $data['uuid']);
+  // we never want to change content type or UUID remotely
+  unset($data['uuid']);
+  unset($data['type']);
+  // account for D7 ship off language property change
+  if (isset($data['language']) && empty($data['language'])) {
+    $data['language'] = 'und';
+  }
+  // allow other projects to modify this though we have no need at the moment
+  drupal_alter('cis_connector_remote_save_data', $data);
+  _cis_connection_set_data($select, $data, $bucket, $instance);
 }
