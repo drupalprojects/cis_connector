@@ -1,14 +1,14 @@
-ELMS: CIS Connector
-Copyright (C) 2013  The Pennsylvania State University
+This is a back port of the Drupal 7 version.  This will see little to no
+improvements once it is deemed stable.  The goal of this edition is for helping
+to migrate Drupal 6 courses to Drupal 7.  It has 1 module to help with remote
+updating of materials based on the structure of courses we have in D6 internally.
 
-Bryan Ollendyke
-bto108@psu.edu
+This can be used to showcase how you can help bridge migrations via UUIDs. A 
+similar package could be created to help migrate ELMS D6 to ELMS D7.  In general
+though, don't use this module unless you know what you are doing.
 
-Keith D. Bailey
-kdb163@psu.edu
-
-12 Borland
-University Park, PA 16802
+The D7 registry of connection details can largely be used here so long as you modify
+the .info file to reference 6.x instead of 7.x.
 
 This module provides some standard functions for building an invisible,
 distributed registry of educational services.  This keeps our implementation
