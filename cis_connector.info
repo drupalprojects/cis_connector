@@ -1,6 +1,5 @@
-name = CIS Connector
-description = Provides structure to bridge CIS data source to other distributions
-core = 7.x
+name = CIS Connector D6
+description = Provides structure to bridge CIS data source to other distributions, backported to Drupal 6 to help bridge migrations.
+core = 6.x
 package = CIS
 dependencies[] = httprl
-files[] = 'cis_connector_views_plugin_display_extender.inc'
