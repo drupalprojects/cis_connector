@@ -34,7 +34,7 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
   }
   // allow for PUT requests which require use of the data property
   if (!empty($data)) {
-    $options['data'] = drupal_to_js($data);
+    $options['data'] = json_encode($data);
     $options['headers'] = array('Content-Type' => 'application/json');
   }
   // build the call
@@ -49,6 +49,7 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
   if (!empty($extra)) {
     $call .= '?' . $extra;
   }
+  
   $response = _cis_connector_request($call, $options, $bucket);
   // ensure a response to connect in the first place
   $data = FALSE;
@@ -72,15 +73,19 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
 /**
  * Wrapper for structured updates to data in CIS.
  */
-function _cis_connection_set_data($select, $data) {
+function _cis_connection_set_data($select, $data, $bucket, $instance) {
   // query to get an information set
-  $resp = _cis_connection_query($select);
+  $resp = _cis_connection_query($select, 'node', 'json', 'GET', $bucket, $instance);
   // if we have an item, its a valid item
   if (!empty($resp['list'])) {
     // update all items that were found
     foreach ($resp['list'] as $response_item) {
+      // special exception to account for body needing a format by name
+      if (isset($data['body']) && !isset($data['body']['format'])) {
+        $data['body']['format'] = $response_item['body']['format'];
+      }
       // post back to CIS
-      _cis_connection_object($response_item['nid'], 'node', NULL, 'PUT', $data);
+      _cis_connection_object($response_item['nid'], 'node', NULL, 'PUT', $data, $bucket, $instance, '');
     }
   }
 }
@@ -90,7 +95,7 @@ function _cis_connection_set_data($select, $data) {
  */
 function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 'node', $query = array()) {
   // abstract a related sub-service, this will just remove the / if base-path is root
-  $path = substr(base_path(), 1);
+  $path = cis_connector_get_base();
   $result = _cis_connection_query($query, $entity_type, 'json', 'GET', $bucket, $path);
   // return items if any were found
   if (isset($result['list'])) {
@@ -158,25 +163,6 @@ function _cis_connector_real_address($path) {
  * Wrapper for http requests
  */  
 function _cis_connector_request($url, $options = array(), $bucket = 'cis') {
-  $data = FALSE;
-  // trick to mash request into a single item
-  $args = func_get_args();
-  // options can be an array so need to implode on its own
-  if (is_array($args[1])) {
-    // headers can be a nested array
-    if (isset($args[1]['headers']) && is_array($args[1]['headers'])) {
-      $args[1]['headers'] = implode('_', $args[1]['headers']);
-    }
-    $args[1] = implode('_', $args[1]);
-  }
-  // append bucket type in case default is utilized
-  if (!isset($args[2])) {
-    $args[2] = $bucket;
-  }
-  // generate a unique call signature
-  $call = __FUNCTION__ . implode('_', $args);
-  // convert to something db friendly
-  $cid = hash('sha512', $call);
   // allow for direct http requests
   if ($bucket == 'none') {
     // queue request
@@ -199,8 +185,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis') {
     return FALSE;
   }
   // easiest way of debugging all calls
-  /*global $user;
-  if ($user->uid == 1) {
+  /*if ($GLOBALS['user']->uid == 1) {
     dpm($data);
   }*/
   return $data;  
@@ -214,17 +199,17 @@ function _cis_connection_prepare_entity($entity) {
   $ary = (array) $entity;
   foreach ($ary as $key => $val) {
     // make sure it's not a key value
-    if (!in_array($key, array('promote', 'revision', 'status', 'sticky', 'body', 'title', 'type', 'language'))) {
+    if (!in_array($key, array('uuid', 'promote', 'revision', 'status', 'sticky', 'body', 'title', 'type', 'language'))) {
       if (strpos($key, 'field_') !== 0) {
         unset($ary[$key]);
       }
       elseif (is_array($val)) {
         // TODO: support multiple field values
-        if (isset($val['und'][0]['value'])) {
-          $ary[$key] = $val['und'][0]['value'];
+        if (isset($val[0]['value'])) {
+          $ary[$key] = $val[0]['value'];
         }
-        elseif (isset($val['und'][0]['url'])) {
-          $ary[$key] = $val['und'][0];
+        elseif (isset($val[0]['url'])) {
+          $ary[$key] = $val[0];
         }
         else {
           // null case, remove it
@@ -233,8 +218,17 @@ function _cis_connection_prepare_entity($entity) {
       }
     }
     elseif ($key == 'body') {
-      $ary['body'] = $val['und'][0];
+      $ary['body'] = array('value' => $val);
     }
   }
   return $ary;
+}
+
+/**
+ * Return a base for connecting to a remote instance.
+ */
+function cis_connector_get_base() {
+  $instance = base_path();
+  drupal_alter('cis_connector_instance', $instance);
+  return $instance;
 }
