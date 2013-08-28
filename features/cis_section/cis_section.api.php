@@ -18,16 +18,26 @@ function hook_section_activate() {
  
 /**
  * Example callback for activating a section
+ *
+ * There is a developer attribute that you can set
+ * on nodes to make sure that syncs don't happen
+ * when they might not need to.  If you detect that
+ * you need to update a section without actually
+ * running the activate hook (for example), you
+ * can test for $node->_ignore_sync being set.
+ * This is implemented below and in cis_section.module
  */
 function _cis_section_activate_callback($node) {
-  // grab section id
-  $section = array($node->field_section_id['und'][0]['value']);
-  // pull the roster together for this section
-  $roster = _psu_angel_sync_build_roster($section);
-  // build the user accounts
-  watchdog('angel', 'Angel synced for section @section', array('@section' => $node->field_section_id['und'][0]['value']));
-  _psu_angel_sync_create_accounts($roster);
-  drupal_set_message(t('Angel synced for section @section', array('@section' => $node->field_section_id['und'][0]['value'])));
+  if (!isset($node->_ignore_sync)) {
+    // grab section id
+    $section = array($node->field_section_id['und'][0]['value']);
+    // pull the roster together for this section
+    $roster = cis_section_assemble_roster($section, TRUE);
+    // build the user accounts
+    watchdog('roster', 'Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value']));
+    _cis_section_create_accounts($roster);
+    drupal_set_message(t('Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value'])));
+  }
 }
 
 /**

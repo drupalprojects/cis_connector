@@ -121,7 +121,7 @@ function cis_section_all_sections($active_only = false) {
     // convert to a readable array of options
     foreach ($results as $val) {
       $section = $val->field_section_id['und'][0]['safe_value'];
-      $sections[$section] = $section;
+      $sections[$section] = $val->title;
     }
     // useful for custom college / university integrations
     drupal_alter('cis_section_list', $sections);
@@ -193,14 +193,19 @@ function cis_section_cis_section_activate() {
  * Callback for hook_cis_section_activate().
  */
 function _cis_section_activate_section($node) {
-  // grab section id
-  $section = array($node->field_section_id['und'][0]['value']);
-  // pull the roster together for this section
-  $roster = cis_section_assemble_roster($section, TRUE);
-  // build the user accounts
-  watchdog('roster', 'Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value']));
-  _cis_section_create_accounts($roster);
-  drupal_set_message(t('Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value'])));
+  // check for a property telling us to ignore this sync
+  // this happens when updating the source node w/o
+  // need to sync such as when the title changes
+  if (!isset($node->_ignore_sync)) {
+    // grab section id
+    $section = array($node->field_section_id['und'][0]['value']);
+    // pull the roster together for this section
+    $roster = cis_section_assemble_roster($section, TRUE);
+    // build the user accounts
+    watchdog('roster', 'Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value']));
+    _cis_section_create_accounts($roster);
+    drupal_set_message(t('Roster synced for section @section', array('@section' => $node->field_section_id['und'][0]['value'])));
+  }
 }
 
 /**
