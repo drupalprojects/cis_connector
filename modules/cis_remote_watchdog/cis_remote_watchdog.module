@@ -18,16 +18,32 @@ function cis_remote_watchdog_cis_service_registry_alter(&$registry) {
  * Impements hook_watchdog().
  */
 function cis_remote_watchdog_watchdog(array $log_entry) {
+  // build a message w/ the user / uid written into it
+  // this is because we can't assume the UIDs match in the
+  // remote service
+  $msg = $log_entry['message'];
+  // write some info into variables for serious error debugging
+  $admin_notices = array(WATCHDOG_EMERGENCY, WATCHDOG_ALERT, WATCHDOG_CRITICAL, WATCHDOG_ERROR, WATCHDOG_WARNING);
+  // limit messages only to certain groups
+  if (array_key_exists($log_entry['severity'], $admin_notices)) {
+    $log_entry['variables']['_cis_user'] = $log_entry['user']->name;
+    $log_entry['variables']['_cis_mail'] = $log_entry['user']->mail;
+    $log_entry['variables']['_cis_uid'] = $log_entry['uid'];
+    $log_entry['variables']['_cis_distro'] = variable_get('install_profile', '');
+    $log_entry['variables']['_cis_instance'] = str_replace('/', '', base_path());
+    $log_entry['variables']['_cis_service_instance'] = variable_get('cis_service_instance_uuid', '');
+  	$log_entry['variables']['_cis_user_agent'] = filter_xss($_SERVER['HTTP_USER_AGENT']);
+	}
   // build the data array to ship off
   $data = array(
-    'uid' => $log_entry['uid'],
+    'uid' => 1,
     'type' => substr($log_entry['type'], 0, 64),
-    'message' => $log_entry['message'],
+    'message' => $msg,
     'variables' => serialize($log_entry['variables']),
     'severity' => $log_entry['severity'],
-    'link' => substr($log_entry['link'], 0, 255),
+    'referer' => (empty($log_entry['referer']) ? $log_entry['request_uri'] : $log_entry['referer']),
     'location' => $log_entry['request_uri'],
-    'referer' => $log_entry['referer'],
+    'link' => substr($log_entry['link'], 0, 255),
     'hostname' => substr($log_entry['ip'], 0, 128),
     'timestamp' => $log_entry['timestamp'],
   );
