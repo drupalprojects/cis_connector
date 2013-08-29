@@ -26,14 +26,26 @@ function cis_remote_watchdog_watchdog(array $log_entry) {
   $admin_notices = array(WATCHDOG_EMERGENCY, WATCHDOG_ALERT, WATCHDOG_CRITICAL, WATCHDOG_ERROR, WATCHDOG_WARNING);
   // limit messages only to certain groups
   if (array_key_exists($log_entry['severity'], $admin_notices)) {
-    $log_entry['variables']['_cis_user'] = $log_entry['user']->name;
-    $log_entry['variables']['_cis_mail'] = $log_entry['user']->mail;
+    if (isset($log_entry['user']->name)) {
+      $name = $log_entry['user']->name;
+    }
+    else {
+      $name = ' ';
+    }
+    if (isset($log_entry['user']->mail)) {
+      $mail = $log_entry['user']->mail;
+    }
+    else {
+      $mail = ' ';
+    }
+    $log_entry['variables']['_cis_user'] = $name;
+    $log_entry['variables']['_cis_mail'] = $mail;
     $log_entry['variables']['_cis_uid'] = $log_entry['uid'];
     $log_entry['variables']['_cis_distro'] = variable_get('install_profile', '');
     $log_entry['variables']['_cis_instance'] = str_replace('/', '', base_path());
     $log_entry['variables']['_cis_service_instance'] = variable_get('cis_service_instance_uuid', '');
-  	$log_entry['variables']['_cis_user_agent'] = filter_xss($_SERVER['HTTP_USER_AGENT']);
-	}
+    $log_entry['variables']['_cis_user_agent'] = filter_xss($_SERVER['HTTP_USER_AGENT']);
+  }
   // build the data array to ship off
   $data = array(
     'uid' => 1,

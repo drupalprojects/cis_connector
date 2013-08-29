@@ -242,6 +242,10 @@ function cis_service_connection_cron() {
     );
     // set the data in the CIS
     _cis_connection_set_data($select, $data);
+    // ask for the LTI request that will be recognized locally
+    if (module_exists('cis_service_lti')) {
+      _cis_service_lti_get_consumer();
+    }
     // delete this variable so this doesn't run ever again
     variable_del('cis_service_connection_initial');
   }
@@ -315,10 +319,6 @@ function _cis_service_connection_initial_cis_bind() {
   $data = module_invoke_all('set_cis_service_data', 'initial');
   // set the data in the CIS
   _cis_connection_set_data($select, $data);
-  // ask for the LTI request that will be recognized locally
-  if (module_exists('cis_service_lti')) {
-    _cis_service_lti_get_consumer();
-  }
   // get the latest footer copy language
   cis_service_connection_get_footer_language();
   // set last sync time
