@@ -152,15 +152,22 @@ function _cis_connection_query($query = array(), $entity_type = 'node', $format 
 /**
  * Return a well formed address based on certain values.
  */
-function _cis_connector_format_address($settings, $instance = '') {
+function _cis_connector_format_address($settings, $instance = '', $method = 'service') {
   // start with protocol
   $address = $settings['protocol'] . '://';
-  // optional HTTP authenticated request, required in any *real* environment
-  if (isset($settings['user'])) {
-    $address .= $settings['user'] . ':' . $settings['pass'] . '@';
+  // allow for front end link or data connection
+  if ($method == 'service') {
+    // optional HTTP authenticated request, required in any *real* environment
+    if (isset($settings['user'])) {
+      $address .= $settings['user'] . ':' . $settings['pass'] . '@';
+    }
+    // append the connection address
+    $address .= $settings['service_address'] . $instance;
   }
-  // append the connection address
-  $address .= $settings['service_address'] . $instance;
+  elseif ($method == 'front') {
+    // append the real address
+    $address .= $settings['address'] . $instance;
+  }
   return $address;
 }
 
@@ -496,11 +503,12 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
       cache_set($cid, $data, 'cache_cis_connector');
     }
   }
+  /*
   // easiest way of debugging all calls
-  /*global $user;
-  if ($user->uid == 1) {
+  if (module_exists('devel') && $GLOBALS['user']->uid == 1) {
     dpm($data);
-  }*/
+  }
+  */
   return $data;  
 }
 
@@ -748,5 +756,34 @@ function cis_connector_form_alter(&$form, &$form_state, $form_id) {
         }
       }
     }
+  }
+}
+
+/**
+ * Simple mail function.
+ */
+function _cis_connector_simple_mail($to, $message_subject, $message_body, $from) {  
+  // These value can remain empty.
+  $my_module = 'cis';
+  $my_mail_token = 'simplemail';
+  $message = array(
+    'id' => $my_module . '_' . $my_mail_token,
+    'to' => $to,
+    'subject' => $message_subject,
+    'body' => array($message_body),
+    'headers' => array(
+      'From' => $from,
+      'Sender' => $from,
+      'Return-Path' => $from,
+    ),
+  );
+  $system = drupal_mail_system($my_module, $my_mail_token);
+  // The format function must be called before calling the mail function. 
+  $message = $system->format($message);
+  if ($system->mail($message)) {
+    // do something when successful
+  }
+  else {
+    // do something if it fails
   }
 }
