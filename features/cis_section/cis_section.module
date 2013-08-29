@@ -95,6 +95,38 @@ function cis_section_cron() {
 }
 
 /**
+ * Implements hook_entity_presave().
+ */
+function cis_section_entity_presave($entity, $type) {
+  // optional ability to email someone standard language
+  // this happens if its a user, and we forced roster sync
+  // and it has the special cis_contact flag and the email
+  // in the address matches the email of this user account
+  // and they were created by the job which triggered this
+  // being created in the first place.  Edge case but very
+  // useful for alleviating workflow when a student is denied
+  // access to the course from an LMS vendor / data source 
+  // and we need to alert IDs about it without forcing action.
+  if ($type == 'user' && 
+      isset($_GET['force_roster_sync']) && 
+      isset($_GET['cis_contact']) &&
+      $_GET['cis_contact'] == $entity->mail
+    ) {
+    $subject = t('You now have access to the @course course', array('@course' => variable_get('site_name', '')));
+    // request the standard language for this edge case
+    $query = array('type' => 'resource', 'field_machine_name' => 'lms_out_of_sync');
+    $resource = _cis_connection_query($query);
+    // render text applying the input filter requested
+    $message = check_markup($resource['list'][0]['body']['value'], $resource['list'][0]['body']['format']);
+    // allow for user in field
+    $message = str_replace('!name', $entity->name, $message);
+    // send an email about
+		watchdog('cis email', '@mail contacted about course being synced', array('@mail' => $entity->mail));
+    _cis_connector_simple_mail($entity->mail, $subject, $message, variable_get('site_mail', $entity->mail));
+	}
+}
+
+/**
  * Return all found sections as these are valid for switching
  * This is essentially a list of the current user's groups
  */

@@ -1,5 +1,7 @@
 <?php
 // passing force_roster_sync via cron to any site running this code
+// additionally passing cis_contact will email someone automatically
+// based on the data stored in resource with machine name lms_out_of_sync
 // will skip it's normal sync routine and run immediately to sync the roster
 
 /**
