@@ -15,16 +15,23 @@ function cis_service_lti_strongarm() {
   $strongarm->api_version = 1;
   $strongarm->name = 'lti_tool_provider_global_role_array';
   $strongarm->value = array(
-    'Learner' => '8',
-    'Instructor' => '5',
-    'ContentDeveloper' => '7',
+    'Learner' => '7',
+    'Instructor' => '4',
+    'ContentDeveloper' => '6',
     'Member' => '2',
     'Manager' => '2',
     'Mentor' => '2',
     'Administrator' => '2',
-    'TeachingAssistant' => '9',
+    'TeachingAssistant' => '8',
   );
   $export['lti_tool_provider_global_role_array'] = $strongarm;
+
+  $strongarm = new stdClass();
+  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+  $strongarm->api_version = 1;
+  $strongarm->name = 'lti_tool_provider_user_attribute_entity_type';
+  $strongarm->value = 'profile2:main';
+  $export['lti_tool_provider_user_attribute_entity_type'] = $strongarm;
 
   $strongarm = new stdClass();
   $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
