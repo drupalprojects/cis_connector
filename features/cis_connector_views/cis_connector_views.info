@@ -1,7 +1,7 @@
 name = CIS Connector Views
 description = Display CIS data in other drupal sites by using the CIS edu registry
 core = 7.x
-package = CIS
+package = CIS Connector
 dependencies[] = cis_connector
 dependencies[] = views
 dependencies[] = views_xml_backend

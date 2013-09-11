@@ -1,7 +1,7 @@
 name = CIS Service CLE
 description = Connections between a CIS Service and CLE
 core = 7.x
-package = CLE
+package = CIS Service Instance
 php = 5.2.4
 dependencies[] = cis_connector
 dependencies[] = views
