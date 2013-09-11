@@ -337,9 +337,40 @@ function cis_service_connection_block_section_outline() {
     // never load when on an edit form in case it gets called
     if (arg(2) != 'edit') {
       $group = cis_service_connection_load_group();
-      // test that an outline is set for a group
-      if (isset($group->nid) && isset($group->field_instructional_outlines['und'])) {
-        $node = node_load($group->field_instructional_outlines['und'][0]['target_id']);
+      // test that we've got a group from context
+      if (isset($group->nid)) {
+        $onid = NULL;
+        if (isset($group->field_instructional_outlines['und'])) {
+          $onid = $group->field_instructional_outlines['und'][0]['target_id'];
+        }
+        else {
+          // edge case where section is set and doesn't have an outline defined
+          // this really is only possible during initial setup of a system
+          // it helps improve ux substantially so you aren't confused
+          // mooc is the only thing using this currently
+          if (module_exists('mooc_helper')) {
+            $onid = variable_get('mooc_default_outline', '');
+            // edge case, default was never set
+            if ($onid == '') {
+              // load all books
+              $books = _mooc_helper_all_book_outlines('nid', 'created');
+              // make sure we at least have some books in here
+              if (is_array($books)) {
+                // move to 1st array position in iterator
+                reset($books);
+                // sort maintaining index which is the nid
+                asort($books);
+                // set default to first key in array
+                $onid = key($books);
+              }
+            }
+          }
+        }
+        // exit early cause we found nothing
+        if (is_null($onid)) {
+          return FALSE;
+        }
+        $node = node_load($onid);
         // load the active outline
         $active = menu_get_object();
         // test for not being on a node as well as global setting overriding outline to use
