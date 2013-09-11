@@ -37,8 +37,8 @@ function cis_section_cron() {
       // loop through sections if they exist
       if (isset($offering['field_sections']['und']) && count($offering['field_sections']['und']) > 0) {
         foreach ($offering['field_sections']['und'] as $section) {
-          // verify that this has the full object
-          if (isset($section['item_id'])) {
+          // verify that this has the full object and has dates
+          if (isset($section['item_id']) && isset($section['field_access_dates']['und'])) {
             $start = $section['field_access_dates']['und'][0]['value'];
             // make sure that we are past the start date of the course
             // if this section hasn't started running, no reason to sync
@@ -98,6 +98,14 @@ function cis_section_cron() {
  * Implements hook_entity_presave().
  */
 function cis_section_entity_presave($entity, $type) {
+  // our default handler for LTI section saves is anonymous
+  // this way we don't need to give users permission to build these
+  if ($type == 'node' && $entity->type == 'section' && $entity->uid == 0) {
+    // force this to be user 1's node, we don't want annonymous anything
+    // as this can create confusion with access control modules and ownership
+    // of content later on in the life cycle
+    $entity->uid = 1;
+  }
   // optional ability to email someone standard language
   // this happens if its a user, and we forced roster sync
   // and it has the special cis_contact flag and the email
@@ -121,9 +129,9 @@ function cis_section_entity_presave($entity, $type) {
     // allow for user in field
     $message = str_replace('!name', $entity->name, $message);
     // send an email about
-		watchdog('cis email', '@mail contacted about course being synced', array('@mail' => $entity->mail));
+    watchdog('cis email', '@mail contacted about course being synced', array('@mail' => $entity->mail));
     _cis_connector_simple_mail($entity->mail, $subject, $message, variable_get('site_mail', $entity->mail));
-	}
+  }
 }
 
 /**
