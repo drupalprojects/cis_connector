@@ -40,18 +40,12 @@ function cis_section_cron() {
           // verify that this has the full object and has dates
           if (isset($section['item_id']) && isset($section['field_access_dates']['und'])) {
             $start = $section['field_access_dates']['und'][0]['value'];
-            // make sure that we are past the start date of the course
-            // if this section hasn't started running, no reason to sync
-            // this prevents those setting things up early from accidentally
-            // pushing users into sections and sections in to services too early
-            if (REQUEST_TIME > strtotime($start)) {
-              // loop through access strings
-              // this is the magic that binds students to sections automatically
-              // and allows the entire network to work as an OG dark-net :)
-              if (isset($section['field_access_string']['und']) && count($section['field_access_string']['und']) > 0) {
-                foreach($section['field_access_string']['und'] as $string) {
-                  $section_strings[$string['safe_value']] = $string['safe_value'];
-                }
+            // loop through access strings
+            // this is the magic that binds students to sections automatically
+            // and allows the entire network to work as an OG dark-net :)
+            if (isset($section['field_access_string']['und']) && count($section['field_access_string']['und']) > 0) {
+              foreach($section['field_access_string']['und'] as $string) {
+                $section_strings[$string['safe_value']] = $string['safe_value'];
               }
             }
           }
@@ -177,20 +171,28 @@ function cis_section_assemble_roster($sections, $activated = FALSE) {
   // build roster based on an array of sections
   $roster = array();
   foreach ($sections as $section) {
-    // can be redundant but helps remove purely developmental section values
+    // ensure we only sync things that should be sycned
+    // this helps elminate purely developmental section spaces like masters
+    // as well as sections primed for setup but not active
+    // as the per the semester dates 
     $dates = _cis_connector_transaction('section_dates', 'default', array(), $section);
-    // only perform this if we have an end date stored
-    if ((isset($dates['end']) && (REQUEST_TIME < $dates['end'])) || $activated) {
-      // build the roster for this section
-      $roster[$section] = module_invoke_all('cis_section_build_roster', $section);
-    }
-    // test for date being set and it being after the end date of course
-    else if (isset($dates['end']) && REQUEST_TIME > $dates['end']) {
-      $nid = _cis_section_load_section_by_id($section);
-      $node = node_load($nid);
-      // mark this as inactive, this will trigger the cis_section clean up on node_update hook
-      $node->field_cis_active['und'][0]['value'] = 0;
-      node_save($node);
+    // only perform this if we have dates stored
+    if (isset($dates['end']) && isset($dates['start'])) {
+      if (($dates['start'] < REQUEST_TIME && $dates['end'] > REQUEST_TIME) || $activated) {
+        // build the roster for this section
+        $roster[$section] = module_invoke_all('cis_section_build_roster', $section);
+      }
+      // test for it being before or after date that this section should be active
+      // this helps allow for logistical setup of a section prior to the semester
+      // start while removing that section's ability to sync its roster.
+      // this reduces strain on APIs via needless calls
+      else if ($dates['start'] > REQUEST_TIME || $dates['end'] < REQUEST_TIME) {
+        $nid = _cis_section_load_section_by_id($section);
+        $node = node_load($nid);
+        // mark this as inactive, this will trigger the cis_section clean up on node_update hook
+        $node->field_cis_active['und'][0]['value'] = 0;
+        node_save($node);
+      }
     }
   }
   return $roster;
