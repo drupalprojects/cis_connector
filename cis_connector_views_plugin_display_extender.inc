@@ -65,8 +65,10 @@ class cis_connector_views_plugin_display_extender extends views_plugin_display_e
    * Handle any special handling on the validate form.
    */
   function options_submit(&$form, &$form_state) {
-    $this->display->set_option('cis_bucket', $form_state['values']['cis_bucket']);
-    $this->display->set_option('cis_instance', $form_state['values']['cis_instance']);
+    if (isset($form_state['values']['cis_bucket'])) {
+      $this->display->set_option('cis_bucket', $form_state['values']['cis_bucket']);
+      $this->display->set_option('cis_instance', $form_state['values']['cis_instance']);
+    }
   }
 
   /**
