@@ -10,7 +10,7 @@
 function cis_section_user_default_permissions() {
   $permissions = array();
 
-  // Exported permission: clone node.
+  // Exported permission: 'clone node'.
   $permissions['clone node'] = array(
     'name' => 'clone node',
     'roles' => array(
@@ -19,7 +19,7 @@ function cis_section_user_default_permissions() {
     'module' => 'clone',
   );
 
-  // Exported permission: clone own nodes.
+  // Exported permission: 'clone own nodes'.
   $permissions['clone own nodes'] = array(
     'name' => 'clone own nodes',
     'roles' => array(
@@ -28,7 +28,7 @@ function cis_section_user_default_permissions() {
     'module' => 'clone',
   );
 
-  // Exported permission: create section content.
+  // Exported permission: 'create section content'.
   $permissions['create section content'] = array(
     'name' => 'create section content',
     'roles' => array(
@@ -40,7 +40,7 @@ function cis_section_user_default_permissions() {
     'module' => 'node',
   );
 
-  // Exported permission: edit any section content.
+  // Exported permission: 'edit any section content'.
   $permissions['edit any section content'] = array(
     'name' => 'edit any section content',
     'roles' => array(
@@ -50,7 +50,7 @@ function cis_section_user_default_permissions() {
     'module' => 'node',
   );
 
-  // Exported permission: edit own section content.
+  // Exported permission: 'edit own section content'.
   $permissions['edit own section content'] = array(
     'name' => 'edit own section content',
     'roles' => array(
