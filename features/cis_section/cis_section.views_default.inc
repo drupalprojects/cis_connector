@@ -27,10 +27,8 @@ function cis_section_views_default_views() {
   $handler->display->display_options['group_by'] = TRUE;
   $handler->display->display_options['access']['type'] = 'role';
   $handler->display->display_options['access']['role'] = array(
-    3 => '3',
-    5 => '5',
-    7 => '7',
     9 => '9',
+    6 => '6',
   );
   $handler->display->display_options['cache']['type'] = 'none';
   $handler->display->display_options['query']['type'] = 'views_query';
@@ -108,7 +106,15 @@ function cis_section_views_default_views() {
   $handler->display->display_options['fields']['field_section_id']['id'] = 'field_section_id';
   $handler->display->display_options['fields']['field_section_id']['table'] = 'field_data_field_section_id';
   $handler->display->display_options['fields']['field_section_id']['field'] = 'field_section_id';
-  $handler->display->display_options['fields']['field_section_id']['element_label_colon'] = FALSE;
+  /* Field: Content: Instructional Outlines */
+  $handler->display->display_options['fields']['field_instructional_outlines']['id'] = 'field_instructional_outlines';
+  $handler->display->display_options['fields']['field_instructional_outlines']['table'] = 'field_data_field_instructional_outlines';
+  $handler->display->display_options['fields']['field_instructional_outlines']['field'] = 'field_instructional_outlines';
+  $handler->display->display_options['fields']['field_instructional_outlines']['label'] = 'Instructional Outline';
+  $handler->display->display_options['fields']['field_instructional_outlines']['settings'] = array(
+    'link' => 0,
+  );
+  $handler->display->display_options['fields']['field_instructional_outlines']['delta_offset'] = '0';
   /* Field: COUNT(DISTINCT OG membership: Entity id) */
   $handler->display->display_options['fields']['etid']['id'] = 'etid';
   $handler->display->display_options['fields']['etid']['table'] = 'og_membership';
@@ -116,6 +122,11 @@ function cis_section_views_default_views() {
   $handler->display->display_options['fields']['etid']['relationship'] = 'og_membership_related_user';
   $handler->display->display_options['fields']['etid']['group_type'] = 'count_distinct';
   $handler->display->display_options['fields']['etid']['label'] = 'Members';
+  /* Field: Content: Active */
+  $handler->display->display_options['fields']['field_cis_active']['id'] = 'field_cis_active';
+  $handler->display->display_options['fields']['field_cis_active']['table'] = 'field_data_field_cis_active';
+  $handler->display->display_options['fields']['field_cis_active']['field'] = 'field_cis_active';
+  $handler->display->display_options['fields']['field_cis_active']['label'] = 'Status';
   /* Field: Content: Post date */
   $handler->display->display_options['fields']['created']['id'] = 'created';
   $handler->display->display_options['fields']['created']['table'] = 'node';
@@ -123,6 +134,12 @@ function cis_section_views_default_views() {
   $handler->display->display_options['fields']['created']['label'] = 'Created';
   $handler->display->display_options['fields']['created']['element_label_colon'] = FALSE;
   $handler->display->display_options['fields']['created']['date_format'] = 'short';
+  /* Field: Content: Edit link */
+  $handler->display->display_options['fields']['edit_node']['id'] = 'edit_node';
+  $handler->display->display_options['fields']['edit_node']['table'] = 'views_entity_node';
+  $handler->display->display_options['fields']['edit_node']['field'] = 'edit_node';
+  $handler->display->display_options['fields']['edit_node']['label'] = '';
+  $handler->display->display_options['fields']['edit_node']['element_label_colon'] = FALSE;
   /* Sort criterion: Content: Post date */
   $handler->display->display_options['sorts']['created']['id'] = 'created';
   $handler->display->display_options['sorts']['created']['table'] = 'node';
@@ -142,37 +159,40 @@ function cis_section_views_default_views() {
   $handler->display->display_options['filters']['type']['value'] = array(
     'section' => 'section',
   );
-  /* Filter criterion: Content: Section id (field_section_id) */
-  $handler->display->display_options['filters']['field_section_id_value']['id'] = 'field_section_id_value';
-  $handler->display->display_options['filters']['field_section_id_value']['table'] = 'field_data_field_section_id';
-  $handler->display->display_options['filters']['field_section_id_value']['field'] = 'field_section_id_value';
-  $handler->display->display_options['filters']['field_section_id_value']['operator'] = 'starts';
-  $handler->display->display_options['filters']['field_section_id_value']['exposed'] = TRUE;
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['operator_id'] = 'field_section_id_value_op';
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['label'] = 'Section ID';
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['operator'] = 'field_section_id_value_op';
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['identifier'] = 'field_section_id_value';
-  $handler->display->display_options['filters']['field_section_id_value']['expose']['remember_roles'] = array(
+  /* Filter criterion: Content: Active (field_cis_active) */
+  $handler->display->display_options['filters']['field_cis_active_value']['id'] = 'field_cis_active_value';
+  $handler->display->display_options['filters']['field_cis_active_value']['table'] = 'field_data_field_cis_active';
+  $handler->display->display_options['filters']['field_cis_active_value']['field'] = 'field_cis_active_value';
+  $handler->display->display_options['filters']['field_cis_active_value']['exposed'] = TRUE;
+  $handler->display->display_options['filters']['field_cis_active_value']['expose']['operator_id'] = 'field_cis_active_value_op';
+  $handler->display->display_options['filters']['field_cis_active_value']['expose']['label'] = 'Status';
+  $handler->display->display_options['filters']['field_cis_active_value']['expose']['operator'] = 'field_cis_active_value_op';
+  $handler->display->display_options['filters']['field_cis_active_value']['expose']['identifier'] = 'field_cis_active_value';
+  $handler->display->display_options['filters']['field_cis_active_value']['expose']['remember_roles'] = array(
     2 => '2',
     1 => 0,
-    6 => 0,
-    4 => 0,
-    8 => 0,
-    9 => 0,
     5 => 0,
-    7 => 0,
     3 => 0,
+    7 => 0,
+    8 => 0,
+    4 => 0,
+    9 => 0,
+    6 => 0,
+    10 => 0,
+    11 => 0,
   );
 
   /* Display: Page */
   $handler = $view->new_display('page', 'Page', 'page');
   $handler->display->display_options['defaults']['hide_admin_links'] = FALSE;
   $handler->display->display_options['path'] = 'cis/section-list';
-  $handler->display->display_options['menu']['type'] = 'tab';
-  $handler->display->display_options['menu']['title'] = 'Sections Admin';
+  $handler->display->display_options['menu']['type'] = 'normal';
+  $handler->display->display_options['menu']['title'] = 'Sections list';
+  $handler->display->display_options['menu']['description'] = 'Listing of all sections in this area';
   $handler->display->display_options['menu']['weight'] = '100';
   $handler->display->display_options['menu']['name'] = 'menu-cis-toolkit';
   $handler->display->display_options['menu']['context'] = 0;
+  $handler->display->display_options['menu']['context_only_inline'] = 0;
   $export['cis_section_list'] = $view;
 
   return $export;
