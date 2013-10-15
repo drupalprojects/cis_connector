@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * Implements hook_filter_info().
+ */
+function cis_filter_filter_info() {
+  $filters = array();
+  $filters['cis_filter'] = array(
+    'title' => t('CIS Filter'),
+    'description' => t('Substitutes [cis] shortcodes with rendered output.'),
+    'process callback' => '_cis_filter_process',
+    'tips callback' => '_cis_filter_tips',
+    'weight' => 10,
+  );
+  return $filters;
+}
+
+/**
+ * Helper function to provide on screen tips for using the filter
+ */
+function _cis_filter_tips($filter, $format, $long = FALSE) {
+  return t('You may insert references to CIS resources, see cis_shortcodes.api.php for details.');
+}
+
+/**
+ * Callback function to perform the content processing.
+ */
+function _cis_filter_process($text, $filter, $format, $langcode, $cache, $cache_id) {
+  $regex = "/\[(\<br \/\>|\s)*cisv1(\<br \/\>|\s)*(\|([a-zA-Z0-9_.\s]+=[-a-zA-Z0-9+.:&@#\/\?<>\"%=~_\s]+))*(\<br \/\>|\s)*\]/";
+  if (preg_match_all($regex, $text, $matches)) {
+    $patterns = array();
+    $media = array();
+    // Have to process multiple matches since more than one player can be on a node.
+    foreach ($matches[0] as $key => $match) {
+      $tag = $match;
+      $config = "";
+      $vars = array();
+      $tag = preg_replace("/\[(\s)*cisv1(\s)*(\||\])/", "", $tag);
+      $tag = str_replace("]", "", $tag);
+      $args = preg_split("/\|/", $tag);
+      // For the current match, process each parameter.
+      foreach ($args as $fvar) {
+        $key_val = preg_split("/=/", $fvar, 2);
+        if ($key_val[0] != "") {
+          $vars[trim($key_val[0])] = trim($key_val[1]);
+        }
+      }
+      $patterns[] = $regex;
+      $media[] = theme('cis_filter_render', array('settings' => $vars));
+    }
+    $text = preg_replace($patterns, $media, $text, 1);
+  }
+  return $text;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function cis_filter_theme() {
+  return array(
+    'cis_filter_render' => array(
+      'variables' => array(
+        'settings' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme callback to render media.
+ */
+function theme_cis_filter_render($vars) {
+  //TODO user connector registry for this
+  $query = http_build_query($vars);
+  // use cached request if available
+  if (module_exists('cis_connector')) {
+    $result = _cis_connector_request($location . '/' . $config .'?'. $query, array(), 'none');
+  }
+  return '<span class="cis_asset">' . $result->data . '</span>';
+}

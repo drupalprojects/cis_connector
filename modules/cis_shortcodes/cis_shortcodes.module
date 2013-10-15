@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * Implements hook_entity_view().
+ */
+function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
+  $links = array();
+  // only add embed methods on full view with access
+  if ($view_mode == 'full' && user_access('view cis shortcode')) {
+    // load info so we know what the key id is
+    $type_info = entity_get_info($type);
+    // we use the same validator as entity iframe since its so similar
+    if (_entity_iframe_view_iframe($type, $entity->{$type_info['entity keys']['id']})) {
+        global $base_url;
+        // build properties array for rendering
+        $properties = array(
+          'cis' => 'v1',
+          'bucket' => $current_bucket, //TODO replace with distro name
+          'resource' => $entity->{$type_info['entity keys']['id']},
+          'type' => $type,
+        );
+        $field['cis_shortcodes']['cis_shortcodes_embed'] = array(
+          '#title' => t('Code'),
+          '#attributes' => array('class' => array('cis_shortcodes_embed')),
+          '#value' => _cis_shortcodes_build_code($properties),
+          '#type' => 'textarea',
+          '#rows' => 3,
+          '#cols' => 1,
+          '#pre_render' => array('_cis_shortcodes_add_js'),
+        );
+        $entity->content['cis_shortcodes'] = array(
+          '#markup' => drupal_render($field),
+          '#weight' => 100,
+        );
+    }
+  }
+}
+
+/**
+ * Helper function to ensure js is added with form element.
+ */
+function _cis_shortcodes_add_js($form) {
+  // add js as we know we'll have a code on the page
+  drupal_add_js(drupal_get_path('module', 'cis_shortcodes') .'/cis_shortcodes.js');
+  return $form;
+}
+
+/**
+ * Helper to return a built code from properties
+ */
+function _cis_shortcodes_build_code($properties) {
+  //TODO need to preserve keys
+  return '[' . implode(' ', $properties) . ']';
+}
