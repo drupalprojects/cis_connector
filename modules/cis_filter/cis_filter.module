@@ -1,4 +1,5 @@
 <?php
+define('CIS_FILTER_INVALID', '-invalid call-');
 
 /**
  * Implements hook_filter_info().
@@ -26,7 +27,7 @@ function _cis_filter_tips($filter, $format, $long = FALSE) {
  * Callback function to perform the content processing.
  */
 function _cis_filter_process($text, $filter, $format, $langcode, $cache, $cache_id) {
-  $regex = "/\[(\<br \/\>|\s)*cisv1(\<br \/\>|\s)*(\|([a-zA-Z0-9_.\s]+=[-a-zA-Z0-9+.:&@#\/\?<>\"%=~_\s]+))*(\<br \/\>|\s)*\]/";
+  $regex = "/\[(\<br \/\>|\s)*ciscode(\<br \/\>|\s)*(\|([a-zA-Z0-9_.\s]+=[-a-zA-Z0-9+.:&@#\/\?<>\"%=~_\s]+))*(\<br \/\>|\s)*\]/";
   if (preg_match_all($regex, $text, $matches)) {
     $patterns = array();
     $media = array();
@@ -35,7 +36,7 @@ function _cis_filter_process($text, $filter, $format, $langcode, $cache, $cache_
       $tag = $match;
       $config = "";
       $vars = array();
-      $tag = preg_replace("/\[(\s)*cisv1(\s)*(\||\])/", "", $tag);
+      $tag = preg_replace("/\[(\s)*ciscode(\s)*(\||\])/", "", $tag);
       $tag = str_replace("]", "", $tag);
       $args = preg_split("/\|/", $tag);
       // For the current match, process each parameter.
@@ -70,11 +71,59 @@ function cis_filter_theme() {
  * Theme callback to render media.
  */
 function theme_cis_filter_render($vars) {
-  //TODO user connector registry for this
-  $query = http_build_query($vars);
-  // use cached request if available
-  if (module_exists('cis_connector')) {
-    $result = _cis_connector_request($location . '/' . $config .'?'. $query, array(), 'none');
+  // NOTICE: allows for future rewrites to the API
+  if ($vars['settings']['rev'] == 1) {
+    $code = array_merge(array(
+      'render' => 'iframe',
+      'item_type' => 'id',
+      'section' => _cis_connector_section_context(),
+      'entity_type' => 'node',
+      'entity_bundle' => NULL,
+      'render_callback' => NULL,
+    ), $vars['settings']);
+    // spec requires tool and item be set
+    if (isset($code['tool']) && isset($code['item'])) {
+      if ($settings = _cis_connector_build_registry($code['tool'])) {
+        // support custom rendering callbacks
+        if (empty($code['render_callback'])) {
+          $instance = '/';
+          if ($settings['instance']) {
+            $instance = base_path();
+          }
+          $link = _cis_connector_format_address($settings, $instance, 'front');
+          switch ($code['render']) {
+            case 'iframe':
+             $result = _cis_filter_iframe_render($link, $code);
+            break;
+            case 'link':
+              $link .= $code['entity_type'] . '/' . $code['item'];
+              $result = $link;
+            break;
+          }
+        }
+        else {
+          // allow custom rendering of the entire thing
+          $result = call_user_func($code['render_callback'], $code);
+        }
+        return $result;
+      }
+    }
   }
-  return '<span class="cis_asset">' . $result->data . '</span>';
+  // nothing picked up the call, render the invalid output fallback
+  return CIS_FILTER_INVALID;
+}
+
+/**
+ * Default callback for rendering a shortcode as an iframe
+ */
+function _cis_filter_iframe_render($link, $code) {
+  $width = '100%';
+  if (isset($code['width'])) {
+    $width = $code['width'];
+  }
+  $height = '300';
+  if(isset($code['height'])) {
+    $height = $code['height'];
+  }
+  return '<iframe src="' . $link . 'entity_iframe/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
 }
