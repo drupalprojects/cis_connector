@@ -1,4 +1,5 @@
 <?php
+define('CIS_SHORTCODES_API_REV', 1);
 
 /**
  * Implements hook_entity_view().
@@ -9,30 +10,61 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
   if ($view_mode == 'full' && user_access('view cis shortcode')) {
     // load info so we know what the key id is
     $type_info = entity_get_info($type);
-    // we use the same validator as entity iframe since its so similar
-    if (_entity_iframe_view_iframe($type, $entity->{$type_info['entity keys']['id']})) {
-        global $base_url;
-        // build properties array for rendering
-        $properties = array(
-          'cis' => 'v1',
-          'bucket' => $current_bucket, //TODO replace with distro name
-          'resource' => $entity->{$type_info['entity keys']['id']},
-          'type' => $type,
-        );
-        $field['cis_shortcodes']['cis_shortcodes_embed'] = array(
-          '#title' => t('Code'),
+    // build properties array for rendering
+    $properties = array(
+      'rev' => CIS_SHORTCODES_API_REV,
+      'tool' => variable_get('install_profile', ''),
+      'item' => $entity->{$type_info['entity keys']['id']},
+    );
+    // only append type for non-node entities
+    if ($type != 'node') {
+      $properties['entity_type'] = $type;
+    }
+    if (module_exists('entity_iframe')) {
+      $field['cis_shortcodes']['cis_shortcodes_embed'] = array(
+        '#title' => t('Shortcode direct iframe'),
+        '#attributes' => array('class' => array('cis_shortcodes_embed')),
+        '#value' => _cis_shortcodes_build_code($properties),
+        '#type' => 'textfield',
+        '#pre_render' => array('_cis_shortcodes_add_js'),
+        '#weight' => 1,
+      );
+    }
+    $properties['render'] = 'link';
+    $field['cis_shortcodes']['cis_shortcodes_link'] = array(
+      '#title' => t('Shortcode direct link'),
+      '#attributes' => array('class' => array('cis_shortcodes_embed')),
+      '#value' => _cis_shortcodes_build_code($properties),
+      '#type' => 'textfield',
+      '#weight' => 3,
+    );
+    // check for unique tag capabilities
+    if (isset($entity->field_cis_tag)) {
+      unset($properties['render']);
+      $properties['item'] = $entity->field_cis_tag['und'][0]['value'];
+      $properties['item_type'] = 'tag';
+      if (module_exists('entity_iframe')) {
+        $field['cis_shortcodes']['cis_shortcodes_tag_iframe'] = array(
+          '#title' => t('Shortcode tagged iframe'),
           '#attributes' => array('class' => array('cis_shortcodes_embed')),
           '#value' => _cis_shortcodes_build_code($properties),
-          '#type' => 'textarea',
-          '#rows' => 3,
-          '#cols' => 1,
-          '#pre_render' => array('_cis_shortcodes_add_js'),
+          '#type' => 'textfield',
+          '#weight' => 2,
         );
-        $entity->content['cis_shortcodes'] = array(
-          '#markup' => drupal_render($field),
-          '#weight' => 100,
-        );
+      }
+      $properties['render'] = 'link';
+      $field['cis_shortcodes']['cis_shortcodes_tag_link'] = array(
+        '#title' => t('Shortcode tagged link'),
+        '#attributes' => array('class' => array('cis_shortcodes_embed')),
+        '#value' => _cis_shortcodes_build_code($properties),
+        '#type' => 'textfield',
+        '#weight' => 4,
+      );
     }
+    $entity->content['cis_shortcodes'] = array(
+      '#markup' => drupal_render($field),
+      '#weight' => 100,
+    );
   }
 }
 
@@ -49,6 +81,9 @@ function _cis_shortcodes_add_js($form) {
  * Helper to return a built code from properties
  */
 function _cis_shortcodes_build_code($properties) {
-  //TODO need to preserve keys
-  return '[' . implode(' ', $properties) . ']';
+  $ary = array();
+  foreach ($properties as $key => $val) {
+    $ary[] = $key . '=' . $val;
+  }
+  return '[ciscode|' . implode('|', $ary) . ']';
 }
