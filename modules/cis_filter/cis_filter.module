@@ -76,7 +76,6 @@ function theme_cis_filter_render($vars) {
     $code = array_merge(array(
       'render' => 'iframe',
       'item_type' => 'id',
-      'section' => _cis_connector_section_context(),
       'entity_type' => 'node',
       'entity_bundle' => NULL,
       'render_callback' => NULL,
@@ -125,5 +124,11 @@ function _cis_filter_iframe_render($link, $code) {
   if(isset($code['height'])) {
     $height = $code['height'];
   }
-  return '<iframe src="' . $link . 'entity_iframe/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
+  // ids we render via entity iframe, otherwise fallback
+  if ($code['item_type'] == 'id') {
+    return '<iframe src="' . $link . 'entity_iframe/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
+  }
+  else {
+    return '<iframe src="' . $link . 'cis-find-tag/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
+  }
 }

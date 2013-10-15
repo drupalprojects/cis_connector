@@ -39,7 +39,7 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
       '#weight' => 3,
     );
     // check for unique tag capabilities
-    if (isset($entity->field_cis_tag)) {
+    if (isset($entity->field_cis_tag) && isset($entity->field_cis_tag['und'])) {
       unset($properties['render']);
       $properties['item'] = $entity->field_cis_tag['und'][0]['value'];
       $properties['item_type'] = 'tag';
