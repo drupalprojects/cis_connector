@@ -8,16 +8,16 @@
  */
 /*
   [
- 		cis={api version} *requried
- 		tool={cis tool name} *required
-		item={tag or id} *required
-		render={iframe or link; default: iframe}
-		item_type={tag or id; default: id}
-		section={section to query, useful with tag; default: _user _context}
-		entity_type={entity type for the id; default: node}
-		entity_bundle={bundle for the id; default: NULL}
-		render_callback={function to handle values; default: NULL}
-	]
+     cis={api version} *requried
+     tool={cis tool name} *required
+    item={tag or id} *required
+    render={iframe or link; default: iframe}
+    item_type={tag or id; default: id}
+    section={section to query, useful with tag; default: _user _context}
+    entity_type={entity type for the id; default: node}
+    entity_bundle={bundle for the id; default: NULL}
+    render_callback={function to handle values; default: NULL}
+  ]
 
 */
 /** 
