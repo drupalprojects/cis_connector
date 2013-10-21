@@ -91,12 +91,17 @@ function theme_cis_filter_render($vars) {
           }
           $link = _cis_connector_format_address($settings, $instance, 'front');
           switch ($code['render']) {
-            case 'iframe':
-             $result = _cis_filter_iframe_render($link, $code);
-            break;
             case 'link':
+              // link based request requires RESTful webservice
+              $url = $code['entity_type'] . '/' . $code['item'] . '.json';
+              // uses property to allow for rapid load of a complex resource
+              $url .= '?deep-load-refs=file';
+              // fallback in case there was nothing to query
               $link .= $code['entity_type'] . '/' . $code['item'];
-              $result = $link;
+              $result = _cis_filter_link_render($url, $code, $link);
+            break;
+            case 'iframe':
+              $result = _cis_filter_iframe_render($link, $code);
             break;
           }
         }
@@ -113,6 +118,25 @@ function theme_cis_filter_render($vars) {
 }
 
 /**
+ * Default callback for rendering a link to the item
+ */
+function _cis_filter_link_render($url, $code, $link = '') {
+  // request data
+  $response = _cis_connector_request($url, array(), $code['tool']);
+  $data = drupal_json_decode($response->data);
+  // if we have the field property set return a link
+  if (isset($code['field']) && isset($data[$code['field']]['uri'])) {
+    // field must have a uri associated with it
+    $path = $data[$code['field']]['uri'];
+    $link = l(t('@t', array('@t' => $code['text'])), $path); 
+  }
+  else if (isset($code['text'])) {
+    $link = l(t('@t', array('@t' => $code['text'])), $link);
+  }
+  return $link;
+}
+
+/**
  * Default callback for rendering a shortcode as an iframe
  */
 function _cis_filter_iframe_render($link, $code) {
@@ -126,7 +150,7 @@ function _cis_filter_iframe_render($link, $code) {
   }
   // ids we render via entity iframe, otherwise fallback
   if ($code['item_type'] == 'id') {
-    return '<iframe src="' . $link . 'entity_iframe/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
+    return '<iframe id="entity_iframe_' . $code['entity_type'] . '_' . $code['item'] . '" frameborder="0" class="entity_iframe entity_iframe_' . $code['entity_type'] . '" src="' . $link . 'entity_iframe/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
   }
   else {
     return '<iframe src="' . $link . 'cis-find-tag/' . $code['entity_type'] . '/' . $code['item'] . '" width="' . $width . '" height="' . $height . '"></iframe>';
