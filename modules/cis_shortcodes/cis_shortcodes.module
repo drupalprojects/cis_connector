@@ -31,16 +31,30 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
       );
     }
     $properties['render'] = 'link';
-    $field['cis_shortcodes']['cis_shortcodes_link'] = array(
-      '#title' => t('Shortcode direct link'),
-      '#attributes' => array('class' => array('cis_shortcodes_embed')),
-      '#value' => _cis_shortcodes_build_code($properties),
-      '#type' => 'textfield',
-      '#weight' => 3,
-    );
+    $field_list = field_info_instances($type, $entity->{$type_info['bundle keys']['bundle']});
+    foreach ($field_list as $fname => $fproperties) {
+      if (isset($entity->{$fname}) && isset($entity->{$fname}['und'][0]['uri'])) {
+        $properties['field'] = $fname;
+        if ($type == 'node') {
+          $properties['text'] = t('Download @title', array('@title' => $entity->title));
+        }
+        else {
+          $properties['text'] = t('Download');
+        }
+        $field['cis_shortcodes']['cis_shortcodes_link_' . $fname] = array(
+          '#title' => t('@field field: direct link', array('@field' => $fproperties['label'])),
+          '#attributes' => array('class' => array('cis_shortcodes_embed')),
+          '#value' => _cis_shortcodes_build_code($properties),
+          '#type' => 'textfield',
+          '#weight' => 3,
+        );
+      }
+    }
     // check for unique tag capabilities
     if (isset($entity->field_cis_tag) && isset($entity->field_cis_tag['und'])) {
       unset($properties['render']);
+      unset($properties['field']);
+      unset($properties['title']);
       $properties['item'] = $entity->field_cis_tag['und'][0]['value'];
       $properties['item_type'] = 'tag';
       if (module_exists('entity_iframe')) {
