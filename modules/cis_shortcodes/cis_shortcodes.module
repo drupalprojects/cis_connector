@@ -48,6 +48,31 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
           '#type' => 'textfield',
           '#weight' => 3,
         );
+        // special case for uri's that are images
+        if (isset($entity->{$fname}['und'][0]['filemime']) && strpos($entity->{$fname}['und'][0]['filemime'], 'image') === 0) {
+          $properties['item_type'] = 'image';
+          // support custom title and alt text in the code
+          if (!empty($entity->{$fname}['und'][0]['title'])) {
+            $properties['text'] = $title;
+          }
+          else {
+            $properties['text'] = $title;
+          if (!empty($entity->{$fname}['und'][0]['alt'])) {
+            $properties['alt'] = $entity->{$fname}['und'][0]['alt'];
+          }
+          else {
+            $properties['alt'] =  $title;
+          }
+          // use image as it was uploaded for defaults
+          $properties['width'] = $entity->{$fname}['und'][0]['width'];
+          $properties['height'] = $entity->{$fname}['und'][0]['height'];
+          $field['cis_shortcodes']['cis_shortcodes_link_' . $fname] = array(
+            '#title' => t('@field field: Render image', array('@field' => $fproperties['label'])),
+            '#attributes' => array('class' => array('cis_shortcodes_embed')),
+            '#type' => 'textfield',
+            '#weight' => 3,
+          );
+        }
       }
     }
     // check for unique tag capabilities
