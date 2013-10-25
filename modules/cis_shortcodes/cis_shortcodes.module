@@ -8,6 +8,17 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
   $links = array();
   // only add embed methods on full view with access
   if ($view_mode == 'full' && user_access('view cis shortcode')) {
+    // pick a nice default title for common entity types
+    $title = '';
+    switch($type) {
+      case 'node':
+        $title = $entity->title;
+      break;
+      case 'user':
+      case 'taxonomy_term':
+        $title = $entity->name;
+      break;
+    }
     // load info so we know what the key id is
     $type_info = entity_get_info($type);
     // build properties array for rendering
@@ -36,7 +47,7 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
       if (isset($entity->{$fname}) && isset($entity->{$fname}['und'][0]['uri'])) {
         $properties['field'] = $fname;
         if ($type == 'node') {
-          $properties['text'] = t('Download @title', array('@title' => $entity->title));
+          $properties['text'] = t('Download @title', array('@title' => $title));
         }
         else {
           $properties['text'] = t('Download');
