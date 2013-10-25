@@ -31,6 +31,14 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
     if ($type != 'node') {
       $properties['entity_type'] = $type;
     }
+    // establish the fieldset container for shortcodes
+    $field['cis_shortcodes'] = array(
+      '#type' => 'fieldset',
+      '#collapsed' => FALSE,
+      '#collapsible' => TRUE,
+      '#title' => t('Short Codes to embed'),
+      '#weight' => -10,
+    );
     if (module_exists('entity_iframe')) {
       $field['cis_shortcodes']['cis_shortcodes_embed'] = array(
         '#title' => t('Shortcode direct iframe'),
@@ -68,6 +76,7 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
           }
           else {
             $properties['text'] = $title;
+          }
           if (!empty($entity->{$fname}['und'][0]['alt'])) {
             $properties['alt'] = $entity->{$fname}['und'][0]['alt'];
           }
@@ -80,6 +89,7 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
           $field['cis_shortcodes']['cis_shortcodes_link_' . $fname] = array(
             '#title' => t('@field field: Render image', array('@field' => $fproperties['label'])),
             '#attributes' => array('class' => array('cis_shortcodes_embed')),
+            '#value' => _cis_shortcodes_build_code($properties),
             '#type' => 'textfield',
             '#weight' => 3,
           );
@@ -88,9 +98,16 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
     }
     // check for unique tag capabilities
     if (isset($entity->field_cis_tag) && isset($entity->field_cis_tag['und'])) {
-      unset($properties['render']);
-      unset($properties['field']);
-      unset($properties['title']);
+      // reset property array
+      $properties = array(
+        'rev' => CIS_SHORTCODES_API_REV,
+        'tool' => variable_get('install_profile', ''),
+        'item' => $entity->{$type_info['entity keys']['id']},
+      );
+      // only append type for non-node entities
+      if ($type != 'node') {
+        $properties['entity_type'] = $type;
+      }
       $properties['item'] = $entity->field_cis_tag['und'][0]['value'];
       $properties['item_type'] = 'tag';
       if (module_exists('entity_iframe')) {
