@@ -128,7 +128,34 @@ function _cis_filter_link_render($url, $code, $link = '') {
   if (isset($code['field']) && isset($data[$code['field']]['uri'])) {
     // field must have a uri associated with it
     $path = $data[$code['field']]['uri'];
-    $link = l(t('@t', array('@t' => $code['text'])), $path); 
+    // special case for rendering images via direct embed
+    if (isset($code['item_type']) && $code['item_type'] == 'image') {
+      $width = '';
+      $height = '';
+      if (isset($code['width'])) {
+        $width = 'width="' . $code['width'] . '"';
+      }
+      if(isset($code['height'])) {
+        $height = 'height="' . $code['height'] . '"';
+      }
+      $alt = '';
+      $title = '';
+      // support custom title and alt text
+      if (isset($code['text'])) {
+        $alt = $code['text'];
+        $title = $code['text'];
+      }
+      if (isset($code['alt'])) {
+        $alt = $code['alt'];
+      }
+      $link = "<img src=\"$path\" $width $height alt=\"$alt\" title=\"$title\" />";
+    }
+    else if (isset($code['text'])) {
+      $link = l(t('@t', array('@t' => $code['text'])), $path);
+    }
+    else {
+      
+    }
   }
   else if (isset($code['text'])) {
     $link = l(t('@t', array('@t' => $code['text'])), $link);
