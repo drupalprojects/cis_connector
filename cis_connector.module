@@ -2,6 +2,7 @@
 // this is a kill switch to force all calls to be uncached
 // trigger this when testing and debugging calls
 define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
+define ('CIS_CONNECTOR_ROOT_USER_DEVELOPMENT', FALSE);
 define ('CIS_CONNECTOR_ENTITY_BOTH', 0);
 define ('CIS_CONNECTOR_ENTITY_REMOTE_ONLY', 1);
 
@@ -450,7 +451,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
   // developers: allow for debug of all calls with fresh values
   // user 1 is always uncached
   global $user;
-  if (CIS_CONNECTOR_DEVELOPMENT || $user->uid == 1) {
+  if (CIS_CONNECTOR_DEVELOPMENT || ($user->uid == 1 && CIS_CONNECTOR_ROOT_USER_DEVELOPMENT)) {
     $cached = FALSE;
   }
   // trick to mash request into a single item
