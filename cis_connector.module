@@ -498,7 +498,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
         $data = array_pop($tmp);
       }
       else {
-        drupal_set_message(t("Educational service registry call missing, connection unavailable. Please see README.txt for details on setup."), 'error');
+        drupal_set_message(t("Educational service registry missing or connection unavailable. This is not a requirement but would allow talking to the other ELMS distributions including CIS. See README.txt for details on how to set this up, otherwise you can ignore this message and disable access to the pages that trigger it."), 'error', FALSE);
         return FALSE;
       }
       cache_set($cid, $data, 'cache_cis_connector');
