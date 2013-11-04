@@ -16,11 +16,12 @@ function hook_cis_service_registry() {
       ),
     // this example is from how CIS uses this
     'cis' => array( // Course Information System distribution
+      'protocol' => 'http', // base protocol for address calls; commonly https or http
+      'service_address' => 'datachannel.example.com', // address to make calls over, this can be the same as address but for added security an alternate domain is recommended 
       'address' => 'www.example.com', // address to connect to for CIS data
       'user' => 'account', // special user account with HTTP authentication access
       'pass' => 'password', // password for that connection account
       'mail' => 'account@example.com', // optional email address for associated account connection
-      'college_machine' => 'aanda', // machine name for the college in question
       'instance' => FALSE, // if this is a per instance distro or single system
     ),
   );
