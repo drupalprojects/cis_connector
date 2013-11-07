@@ -131,7 +131,7 @@ function cis_connector_views_views_default_views() {
   $handler->display->display_options['filters']['text']['group_info']['identifier'] = 'text';
   $handler->display->display_options['filters']['text']['group_info']['group_items'] = array(
     1 => array(
-      'title' => 'Academic Units',
+      'title' => 'Academic units',
       'operator' => '=',
       'value' => 'academic_unit',
     ),

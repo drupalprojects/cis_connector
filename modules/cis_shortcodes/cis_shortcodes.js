@@ -1,5 +1,6 @@
 /**
- * Allow for auto selection of cis shortcode content area on focus
+ * @file
+ * Allow for auto selection of cis shortcode content area on focus.
  */
 (function ($) {
   Drupal.behaviors.cis_shortcodes = {

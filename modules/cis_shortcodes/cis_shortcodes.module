@@ -1,4 +1,8 @@
 <?php
+/**
+ * @file
+ * Handle shortcode generation for use in sites running cis_filter.
+ */
 define('CIS_SHORTCODES_API_REV', 1);
 
 /**
@@ -10,7 +14,7 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
   if ($view_mode == 'full' && user_access('view cis shortcode')) {
     // pick a nice default title for common entity types
     $title = '';
-    switch($type) {
+    switch ($type) {
       case 'node':
         $title = $entity->title;
       break;
@@ -140,12 +144,17 @@ function cis_shortcodes_entity_view($entity, $type, $view_mode, $langcode) {
  */
 function _cis_shortcodes_add_js($form) {
   // add js as we know we'll have a code on the page
-  drupal_add_js(drupal_get_path('module', 'cis_shortcodes') .'/cis_shortcodes.js');
+  drupal_add_js(drupal_get_path('module', 'cis_shortcodes') . '/cis_shortcodes.js');
   return $form;
 }
 
 /**
  * Helper to return a built code from properties
+ *
+ * @param $properties
+ *   a keyed array of properties used to generate a shortcode.
+ * @return string
+ *   a string representation of the properties as a shortcode.
  */
 function _cis_shortcodes_build_code($properties) {
   $ary = array();

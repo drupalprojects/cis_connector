@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Definition of cis_connector_views_plugin_display_extender.
@@ -9,7 +8,7 @@
  * Adds the CIS connector options to the display
  *
  * @ingroup views_display_plugins
- */
+ * @ignore style_class_names*/
 class cis_connector_views_plugin_display_extender extends views_plugin_display_extender {
   function add_signature(&$view) {}
   /**
@@ -21,7 +20,9 @@ class cis_connector_views_plugin_display_extender extends views_plugin_display_e
     $options['cis_instance'] = array('default' => TRUE);
     return $options;
   }
-  
+  /**
+   * Alter the options to allow for defaults.
+   */
   function options_definition_alter(&$options) {
     $options['cis_bucket'] = array('default' => '-none-');
     $options['cis_instance'] = array('default' => TRUE);
@@ -43,14 +44,12 @@ class cis_connector_views_plugin_display_extender extends views_plugin_display_e
       $form['cis_bucket'] = array(
         '#type' => 'select',
         '#options' => $options,
-        '#title' => t('Connector Bucket'),
+        '#title' => t('Connector bucket'),
         '#description' => t('Which service instance should this view connect to'),
         '#weight' => 0,
         '#default_value' => $this->display->get_option('cis_bucket'),
       );
       // allow for designation of a related instance or if this is a single service
-      // this is the site.example.com/{course} connecting to site2.example.com/{course}
-      // or if it is unchecked, it will attempt to connect to site2.example.com/
       $form['cis_instance'] = array(
         '#type' => 'checkbox',
         '#title' => t('Instance'),
@@ -81,9 +80,9 @@ class cis_connector_views_plugin_display_extender extends views_plugin_display_e
       $bucket = check_plain(trim($this->display->get_option('cis_bucket')));
       $options['cis_connector'] = array(
         'category' => 'other',
-        'title' => t('CIS Connector'),
+        'title' => t('CIS connector'),
         'value' => $bucket,
-        'desc' => t('CIS Connector settings to modify request address dynamically.'),
+        'desc' => t('CIS connector settings to modify request address dynamically.'),
       );
     }
   }

@@ -1,10 +1,11 @@
 <?php
 /**
  * @file
- * Install routine to set up activation code things
+ * Install routine to set up activation code things.
  */
+
 /**
- * Implementation of hook_install().
+ * Implements hook_install().
  */
 function cis_service_activation_codes_install() {
   // load role for student

@@ -15,5 +15,5 @@ function cis_service_restws_features_override_default_overrides() {
   $overrides["user_permission.access content.roles|SERVICE ACCOUNT"] = 'SERVICE ACCOUNT';
   $overrides["user_permission.bypass node access.roles|SERVICE ACCOUNT"] = 'SERVICE ACCOUNT';
 
- return $overrides;
+  return $overrides;
 }

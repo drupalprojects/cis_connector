@@ -1,4 +1,8 @@
 <?php
+/**
+ * @file
+ * Helps power documentation site and lists full network.
+ */
 
 /**
  * Implements hook_drupalapi_add_projects().

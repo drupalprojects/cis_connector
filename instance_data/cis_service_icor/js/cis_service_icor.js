@@ -1,4 +1,7 @@
-// JavaScript Document
+/**
+ * @file
+ * Helper to insert icor clicked object references into ckeditor.
+ */
 (function($) {
   $(document).ready(function(){
     $('body').append('<input id="asset-clicked" type="hidden" value="0" />');

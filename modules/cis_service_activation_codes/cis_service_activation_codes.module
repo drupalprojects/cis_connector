@@ -1,4 +1,8 @@
 <?php
+/**
+ * @file
+ * Activation code integration with CIS.
+ */
 define('CIS_SERVICE_ACTIVATION_CODES_WINDOW', 1209600);
 define('ACTIVATION_CODE_ACCESS_DENY', 0);
 define('ACTIVATION_CODE_ACCESS_GRANT', 1);
@@ -24,7 +28,7 @@ function cis_service_activation_codes_menu() {
   $path = drupal_get_path('module', 'cis_service_activation_codes');
   // admin settings for activation codes
   $items['admin/config/system/cis-service-activation-codes'] = array(
-    'title' => 'CIS Service Activation Codes',
+    'title' => 'CIS service activation codes',
     'description' => 'Options for implementation of activation codes in this site',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('cis_service_activation_codes_admin_settings'),
@@ -34,7 +38,7 @@ function cis_service_activation_codes_menu() {
     'file path' => $path,
   );
   $items['activation-blocked'] = array(
-    'title' => 'Activation Code Required',
+    'title' => 'Activation code required',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('cis_service_activation_codes_form'),
     'access arguments' => array('access content'),
@@ -54,7 +58,7 @@ function cis_service_activation_codes_page_build(&$page) {
       drupal_add_css(drupal_get_path('module', 'cis_service_activation_codes') . '/cis_service_activation_codes.css');
       drupal_add_js(drupal_get_path('module', 'cis_service_activation_codes') . '/cis_service_activation_codes.js');
       $page['content']['cis_service_activation_codes'] = array(
-        '#markup' => drupal_render(drupal_get_form('cis_service_activation_codes_form')), 
+        '#markup' => drupal_render(drupal_get_form('cis_service_activation_codes_form')),
         '#weight' => 100,
       );
     }
@@ -66,8 +70,7 @@ function cis_service_activation_codes_page_build(&$page) {
  */
 function _cis_service_activation_code_remaining_time($account = NULL) {
   if (empty($account)) {
-    global $user;
-    $account = $user;
+    $account = $GLOBALS['user'];
   }
   // look up dates we care about
   $dates = _cis_connector_transaction('section_dates');
@@ -90,7 +93,6 @@ function _cis_service_activation_code_remaining_time($account = NULL) {
  * Activation code entry block / form.
  */
 function cis_service_activation_codes_form() {
-  global $user;
   // convert timestamp into days remaining
   $window = ceil(_cis_service_activation_code_remaining_time() / 60 / 60 / 24);
   // format window day(s)
@@ -157,9 +159,8 @@ function cis_service_activation_codes_form_validate($form, &$form_state) {
  * Activation code entry form submission.
  */
 function cis_service_activation_codes_form_submit($form, &$form_state) {
-  global $user;
   // access checks passed, give the user the role
-  user_multiple_role_edit(array($user->uid), 'add_role', variable_get('cis_service_activation_codes_role_grant', 2));
+  user_multiple_role_edit(array($GLOBALS['user']->uid), 'add_role', variable_get('cis_service_activation_codes_role_grant', 2));
   drupal_set_message(t('Activation code accepted!'), 'status');
 }
 
@@ -184,8 +185,7 @@ function cis_service_activation_codes_user_login(&$edit, $account) {
 function _cis_service_activation_codes_verify($account = NULL) {
   // allow for verification of other accounts
   if (is_null($account)) {
-    global $user;
-    $account = $user;
+    $account = $GLOBALS['user'];
   }
   // verify they have a role which requires a code
   $intersect = array_intersect_key(variable_get('cis_service_activation_codes_role_check', array(2)), $account->roles);

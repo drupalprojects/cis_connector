@@ -1,5 +1,10 @@
 <?php
 /**
+ * @file
+ * Install the CIS connector cache table.
+ */
+
+/**
  * Implements hook_schema().
  */
 function cis_connector_schema() {

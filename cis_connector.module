@@ -1,4 +1,14 @@
 <?php
+/**
+ * @file
+ * CIS Connector, library to build an ELMS learning network.
+ *
+ * This is a collection of modules and features that enables
+ * distributions to talk to each other via structured
+ * webservice calls.  Drupal to drupal and Drupal to anything
+ * that provides xml / json is supported.
+ */
+
 // this is a kill switch to force all calls to be uncached
 // trigger this when testing and debugging calls
 define ('CIS_CONNECTOR_DEVELOPMENT', FALSE);
@@ -12,22 +22,32 @@ define ('CIS_CONNECTOR_ENTITY_REMOTE_ONLY', 1);
 function cis_connector_restws_meta_controls_alter(&$controls) {
   $controls['deep-load-refs'] = 'deep-load-refs';
 }
+
 /**
  * Build the registry of educational connectors
+ *
+ * @param $bucket
+ *   (optional) the tool that you want to build
+ *   connection settings for. If no bucket is passed
+ *   then the return will have all settings for all
+ *   buckets that have been defined.
+ *
+ * @return $settings
+ *   an array of connection settings details or FALSE
  */
-function _cis_connector_build_registry($component = NULL) {
+function _cis_connector_build_registry($bucket = NULL) {
   // statically cache future calls
-  $settings = &drupal_static(__FUNCTION__ . $component);
+  $settings = &drupal_static(__FUNCTION__ . $bucket);
   if (!isset($settings)) {
     // invoke special hook for registry settings
     $settings = module_invoke_all('cis_service_registry');
     // follows best practice of drupal but only provided for future override potential
     drupal_alter('cis_service_registry', $settings);
   }
-  if (!is_null($component)) {
-    // validate that this component exists
-    if (isset($settings[$component])) {
-      return $settings[$component];
+  if (!is_null($bucket)) {
+    // validate that this bucket exists
+    if (isset($settings[$bucket])) {
+      return $settings[$bucket];
     }
     return FALSE;
   }
@@ -39,10 +59,50 @@ function _cis_connector_build_registry($component = NULL) {
 }
 
 /**
- * Wrapper for structured calls against CIS system
+ * Structured calls against single objects in CIS.
+ *
+ * @param $id
+ *   (optional) entity id of the item to request.
+ * @param $entity_type
+ *   (optional) entity type to return, defaults to `node`.
+ * @param $format
+ *   (optional) format of the data to return, json / xml
+ *   are built in RestWS response formats.
+ * @param $method
+ *   (optional) method of connection to issue, GET POST or PUT.
+ * @param $data
+ *   (optional) array to send in the request, only useful
+ *   when the method of connection is POST or PUT. This info
+ *   is passed via json encoding so must be used with json
+ *   format option.
+ * @param $bucket
+ *   (optional) data bucket to request, default is cis but
+ *   any tool currently in this network is valid.
+ * @param $instance
+ *   (optional) instanace of a tool / distribution to request.
+ *   For example, this can be used as the base_url() to ask
+ *   a cle tool instance about how to create a link to an assignment
+ *   for display in the mooc distributioncourse living in mooc.
+ *   By not requiring instance to match you could also ask other
+ *   drupal based webservices for information where base_url does
+ *   not match.  ELMSLN has no use-case for that yet though.
+ * @param $cache
+ *   (optional) whether or not to cache the request, only valid
+ *   when requesting data via GET.
+ * @param $extra
+ *   (optional) this can contain other non-data options that the service
+ *   may use internally.  Common example could be passing 'deep-load-refs'
+ *   as the $extra variable so that entity references with in the result
+ *   set are automatically loaded.  This is a string so it can contain
+ *   any data that the current API doesn't support.
+ * @param $call_options
+ *   (optional) options beyond method. used for additional flexibility
+ *   in complex requests that may require header changes for example
+ *   transmitting files or issing non-blocking calls.
+ * @return $data
+ *   an array of resulting entities, even if updated.
  */
 function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'json', $method = 'GET', $data = NULL, $bucket = 'cis', $instance = '', $cache = TRUE, $extra = '', $call_options = NULL) {
-  // invoke special hook for registry settings
   // options for method
   $options = array('method' => $method);
   if (!empty($call_options)) {
@@ -56,7 +116,7 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
   // build the call
   $call = $instance . $entity_type;
   if (!is_null($id)) {
-   $call .= '/' . $id;
+    $call .= '/' . $id;
   }
   if (!empty($format)) {
     $call .= '.' . $format;
@@ -94,6 +154,21 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
 
 /**
  * Wrapper for structured updates to data in CIS.
+ *
+ * This provides a standard way of selecting results
+ * in the CIS from any tool. It then takes those entities
+ * and alters the data key pairs associated to them
+ * An example usage of this would be selecting a
+ * service-instance in the CIS and updating the cron_key
+ * in one function instead of multiple transactions.
+ *
+ * @param $select
+ *   array of values to select in the CIS data source
+ *   which supports multiple values but commonly is
+ *   for the selection of 1 item
+ * @param $data
+ *   the data values to modify in the result set of
+ *   items that were found via the select.
  */
 function _cis_connection_set_data($select, $data) {
   // query to get an information set
@@ -109,7 +184,25 @@ function _cis_connection_set_data($select, $data) {
 }
 
 /**
- * Wrapper for structured queries against matching CIS services
+ * Wrapper for structured queries against a matching service.
+ *
+ * This is mostly a shortcut for getting the information we'll
+ * most commonly want from _cis_connection_query().
+ *
+ * @param $bucket
+ *   (optional) data bucket to request, default is cis but
+ *   this really needs to be performed against a matching
+ *   service instance in the network like mooc -> cle.
+ * @param $entity_type
+ *   (optional) entity type to return, defaults to `node`.
+ * @param $query
+ *   (optional) array of key paired data for selecting
+ *   matching entities.
+ * @param $cache
+ *   (optional) whether or not to cache the request, only valid
+ *   when requesting data via GET.
+ * @return $result['list']
+ *   an array of resulting entities or null if none returned.
  */
 function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 'node', $query = array(), $cached = TRUE) {
   // abstract a related sub-service, this will just remove the / if base-path is root
@@ -124,6 +217,33 @@ function _cis_connection_service_instance_query($bucket = 'cis', $entity_type = 
 
 /**
  * Wrapper for structured queries against CIS system
+ *
+ * @param $query
+ *   (optional) array of key paired data for selecting
+ *   matching entities.
+ * @param $entity_type
+ *   (optional) entity type to return, defaults to `node`.
+ * @param $format
+ *   (optional) format of the data to return, json / xml
+ *   are built in RestWS response formats.
+ * @param $method
+ *   (optional) method of connection to issue, GET POST or PUT.
+ * @param $bucket
+ *   (optional) data bucket to request, default is cis but
+ *   any tool currently in this network is valid.
+ * @param $instance
+ *   (optional) instanace of a tool / distribution to request.
+ *   For example, this can be used as the base_url() to ask
+ *   a cle tool instance about how to create a link to an assignment
+ *   for display in the mooc distributioncourse living in mooc.
+ *   By not requiring instance to match you could also ask other
+ *   drupal based webservices for information where base_url does
+ *   not match.  ELMSLN has no use-case for that yet though.
+ * @param $cache
+ *   (optional) whether or not to cache the request, only valid
+ *   when requesting data via GET.
+ * @return $data
+ *   an array of resulting entities.
  */
 function _cis_connection_query($query = array(), $entity_type = 'node', $format = 'json', $method = 'GET', $bucket = 'cis', $instance = '', $cached = TRUE) {
   // options for method
@@ -150,8 +270,26 @@ function _cis_connection_query($query = array(), $entity_type = 'node', $format 
   }
   return $data;
 }
+
 /**
  * Return a well formed address based on certain values.
+ *
+ * @param $settings
+ *   The connection settings for a tool in the network.
+ *   This should be provided by _cis_connector_build_registry().
+ * @param $instance
+ *   (optional) The instance to issue the request against.
+ * @param $method
+ *   (optional) service based or front facing address to generate.
+ *   This is whether or not to append web service account credentials
+ *   to the request and also has front-end vs back-end call implications.
+ * @return $address
+ *   A formatted string that links to the other service and would provide
+ *   a successful connection either as a back-end process or front end
+ *   link for a person to see.
+ *
+ * @see _cis_connector_build_registry()
+ * @see _cis_connector_real_address()
  */
 function _cis_connector_format_address($settings, $instance = '', $method = 'service') {
   // start with protocol
@@ -173,10 +311,25 @@ function _cis_connector_format_address($settings, $instance = '', $method = 'ser
 }
 
 /**
- * Swap file path from service_address to real file location
+ * Swap file path from service_address to real file location.
+ *
+ * This is required at times when requesting file path of
+ * a file in the remote system's file directory. While
+ * it is not a requirement to have an alternate service
+ * address from the real one, it is highly recommended
+ * for increased security.  As a result, calls against
+ * this service address will naturally have the service
+ * address built into them because of how drupal handles
+ * public:// and private:// file references.
+ *
+ * @param $path
+ *   The path to modify to the real address
+ * @return string
+ *   The path after being modified to have the services location removed.
  */
 function _cis_connector_real_address($path) {
   // verify settings bucket exist
+  // @ignore druplart_conditional_assignment
   if ($settings = _cis_connector_build_registry('cis')) {
     // need to account for services in the services sites bucket
     // then need to swap service address for front-end address
@@ -185,7 +338,29 @@ function _cis_connector_real_address($path) {
 }
 
 /**
- * Returns the user's section context from their group / global
+ * Returns the user's section context from their group / global.
+ *
+ * This function can be thought of as the elmsln equivalent
+ * of og's og_context function.  It looks at environmental values
+ * including who you are and where you are currently to attempt
+ * to determine section context.  This is important when making
+ * determinations about which queries to structure and execute
+ * against the CIS or other systems in the network.
+ *
+ * In the MOOC distribution, this is used in order to determine
+ * which instructional outline to present a user. Needless to say
+ * this is an extremely important function that helps unify the
+ * user experience in all interactions with the site without
+ * the need for bloated capabilies like purl module.
+ *
+ * @param $account
+ *   (optional) user account to calculate context against but
+ *   if none is specified, it assumes currently logged in user.
+ * @return $section
+ *   The system-wide, unique value based on field_section_id
+ *   associated with an OG node in the system.
+ *
+ * @see og_context()
  */
 function _cis_connector_section_context($account = NULL) {
   // statically cache future calls
@@ -197,8 +372,7 @@ function _cis_connector_section_context($account = NULL) {
     }
     // use current user if acount is not set
     if (empty($account)) {
-      global $user;
-      $account = $user;
+      $account = $GLOBALS['user'];
     }
     // attempt to grab og context, rare but possible
     $group = og_context();
@@ -218,7 +392,7 @@ function _cis_connector_section_context($account = NULL) {
       $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
     }
     else {
-      // TODO: should probably have better handling as to what the default is
+      // @todo should probably have better handling as to what the default is
       // essentially group / section this is an error when running this
       $section = 'default';
     }
@@ -227,9 +401,27 @@ function _cis_connector_section_context($account = NULL) {
 }
 
 /**
- * Callback to return structured data
+ * Callback to issue a complex transaction against CIS.
  *
- * This is for some commonly requested things that may take multiple queries to accomplish
+ * This is for some commonly requested things that may
+ * take multiple queries to accomplish. There is no API
+ * for adding things to this list at this time as these
+ * can be thought of as internal system short-cut routines.
+ *
+ * @param $request
+ *   The transaction to request, `section` being a common one.
+ * @param $format
+ *   (optional) An optional condition to streamline the method
+ *   of output.  This is only used by some transactions.
+ * @param $query
+ *   (optional) Additional query params that some complex
+ *   transactions need to obtain the right data set.
+ * @param $section
+ *   (optional) Perform this transaction for a specific section
+ *   but will usually just default to active section context.
+ * @return $output
+ *   The returned output is specific to each transaction
+ *   but is typically a keyed array or string.
  */
 function _cis_connector_transaction($request, $format = 'default', $query = array(), $section = NULL) {
   // return false if we don't match a request
@@ -276,7 +468,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           // query the service object
           $service_object = _cis_connection_query($query, $service_field['resource']);
           // hold onto the objects
-          $output[$key] = $service_object['list'][0];    
+          $output[$key] = $service_object['list'][0];
         }
       }
     break;
@@ -295,12 +487,12 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           $services = _cis_connector_transaction('other_services');
           // make sure this is actually using other services
           if (is_array($services)) {
-             // render each service return item
-             foreach ($services as $service) {
-               $list .= '<h2>' . $service['title'] . '</h2>' . "\n";
-               $list .= '<div>' . $service['body']['value'] . "\n";
-               $list .= l(t('Access the @title service', array('@title' => $service['title'])), $service['field_location']['url'] . base_path()) . '</div>' . "\n";
-             }
+            // render each service return item
+            foreach ($services as $service) {
+              $list .= '<h2>' . $service['title'] . '</h2>' . "\n";
+              $list .= '<div>' . $service['body']['value'] . "\n";
+              $list .= l(t('Access the @title service', array('@title' => $service['title'])), $service['field_location']['url'] . base_path()) . '</div>' . "\n";
+            }
           }
           // loop through resources associated to build their info
           foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
@@ -328,42 +520,6 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       $class_begin = $cis_section_item['list'][0]['field_course_start'];
       // return access start and end timestamps
       $output = array('start' => $dates['value'], 'class_begin' => $class_begin, 'end' => $dates['value2']);
-    break;
-    case 'activation_code':
-      // request the code input by the user
-      $codes = _cis_connection_query($query, 'activation_code');
-      // ensure we found 1 code
-      if (count($codes['list']) == 1) {
-        $code = $codes['list'][0];
-        global $user;
-        // verify this was never used before
-        if ($code['used'] == 0 && $code['name'] == '' && $code['granted'] == '') {        
-          $query = array('used' => REQUEST_TIME, 'name' => $user->name, 'granted' => str_replace('/', '', base_path()));
-          // internal code id to query against path for update
-          _cis_connection_object($code['acid'], 'activation_code', NULL, 'PUT', $query);
-          // TRUE
-          $output = ACTIVATION_CODE_ACCESS_GRANT;
-        }
-        // edge case where system revoked their access incorrectly
-        // this helps improve integrity if a roster sync is inaccurate
-        if ($code['used'] != 0 && $code['name'] == $user->name && $code['granted'] == str_replace('/', '', base_path())) {
-          $output = ACTIVATION_CODE_ACCESS_GRANT;
-        }
-        else {
-          // a different user already used this code
-          if ($code['name'] != $user->name) {
-            drupal_set_message(t('Another user already used this code! ECODE: REUSE'), 'error');
-          }
-          else {
-            // user has tried to use a valid code again; in a different course
-            drupal_set_message(t('This code has been used already to unlock access in another course! ECODE: OTHER'), 'error');
-          }
-          $output = ACTIVATION_CODE_ACCESS_DENY;
-        }
-      }
-      else {
-        $output = ACTIVATION_CODE_ACCESS_DENY;
-      }
     break;
     case 'welcome_page':
       // query access string based on section context
@@ -439,19 +595,70 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
         $output = t('You must be enrolled in this course in order to view the @request', array('@request' => $request));
       }
     break;
+    case 'activation_code':
+      // request the code input by the user
+      $codes = _cis_connection_query($query, 'activation_code');
+      // ensure we found 1 code
+      if (count($codes['list']) == 1) {
+        $code = $codes['list'][0];
+        // verify this was never used before
+        if ($code['used'] == 0 && $code['name'] == '' && $code['granted'] == '') {
+          $query = array('used' => REQUEST_TIME, 'name' => $GLOBALS['user']->name, 'granted' => str_replace('/', '', base_path()));
+          // internal code id to query against path for update
+          _cis_connection_object($code['acid'], 'activation_code', NULL, 'PUT', $query);
+          // TRUE
+          $output = ACTIVATION_CODE_ACCESS_GRANT;
+        }
+        // edge case where system revoked their access incorrectly
+        // this helps improve integrity if a roster sync is inaccurate
+        if ($code['used'] != 0 && $code['name'] == $GLOBALS['user']->name && $code['granted'] == str_replace('/', '', base_path())) {
+          $output = ACTIVATION_CODE_ACCESS_GRANT;
+        }
+        else {
+          // a different user already used this code
+          if ($code['name'] != $GLOBALS['user']->name) {
+            drupal_set_message(t('Another user already used this code! ECODE: REUSE'), 'error');
+          }
+          else {
+            // user has tried to use a valid code again; in a different course
+            drupal_set_message(t('This code has been used already to unlock access in another course! ECODE: OTHER'), 'error');
+          }
+          $output = ACTIVATION_CODE_ACCESS_DENY;
+        }
+      }
+      else {
+        $output = ACTIVATION_CODE_ACCESS_DENY;
+      }
+    break;
   }
   return $output;
 }
 
 /**
- * Wrapper for http requests to enable cached requests
- */  
+ * Wrapper for http requests to enable cached requests.
+ *
+ * @param $url
+ *   address to issue the request against.
+ * @param $options
+ *   (optional) A series of httprl based query options
+ *   The most common one being blocking => FALSE
+ * @param $bucket
+ *   (optional) The webservice machine name to issue the
+ *   command against.  Defaults to cis for hub connection
+ *   but most of the time this should be defined as you
+ *   will want to access data from other tools in the network.
+ * @param $cached
+ *   (optional) Whether or not to use a cached version of
+ *   the request.  This defaults to TRUE though developers
+ *   will want to potentially issue requests that are never
+ *   cached. User 1 always recieves uncached requests to
+ *   avoid potential confusion while debugging.
+ */
 function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cached = TRUE) {
   $data = FALSE;
   // developers: allow for debug of all calls with fresh values
   // user 1 is always uncached
-  global $user;
-  if (CIS_CONNECTOR_DEVELOPMENT || ($user->uid == 1 && CIS_CONNECTOR_ROOT_USER_DEVELOPMENT)) {
+  if (CIS_CONNECTOR_DEVELOPMENT || ($GLOBALS['user']->uid == 1 && CIS_CONNECTOR_ROOT_USER_DEVELOPMENT)) {
     $cached = FALSE;
   }
   // trick to mash request into a single item
@@ -476,8 +683,9 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
     // convert to something db friendly
     $salt = drupal_get_hash_salt();
     $cid = hash('sha512', $salt . $call);
+    // @ignore druplart_conditional_assignment
     if ($cached && ($cache = cache_get($cid, 'cache_cis_connector'))) {
-      $data = $cache->data; 
+      $data = $cache->data;
     }
     else {
       // allow for direct http requests
@@ -489,7 +697,8 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
         $data = array_pop($tmp);
       }
       // look for settings for this bucket
-      else if ($settings = _cis_connector_build_registry($bucket)) {
+      // @ignore druplart_conditional_assignment
+      elseif ($settings = _cis_connector_build_registry($bucket)) {
         $address = _cis_connector_format_address($settings);
         // queue the request
         httprl_request($address . '/' . $url, $options);
@@ -505,12 +714,15 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
     }
   }
   /*
-  // easiest way of debugging all calls
+  // debug all calls
+  // @ignore production_code
   if (module_exists('devel') && $GLOBALS['user']->uid == 1) {
+    // @ignore production_code
     dpm($data);
+  // @ignore production_code
   }
   */
-  return $data;  
+  return $data;
 }
 
 /**
@@ -553,7 +765,7 @@ function cis_connector_flush_caches() {
  */
 function cis_connector_admin_menu_cache_info() {
   $caches['cis_connector'] = array(
-    'title' => t('CIS Data'),
+    'title' => t('CIS data'),
     'callback' => '_cis_connector_cache_clear',
   );
   return $caches;
@@ -571,11 +783,15 @@ function cis_connector_views_api() {
 
 /**
  * Access callback for user roles.
+ *
+ * @param $roles
+ *   a list of roles to compare the current user against.
+ * @return bolean
+ *   Whether or not the current user has this role.
  */
 function cis_connector_role_access($roles) {
-  global $user;
   foreach ($roles as $role) {
-    if (in_array($role, $user->roles)) {
+    if (in_array($role, $GLOBALS['user']->roles)) {
       return TRUE;
     }
   }
@@ -583,8 +799,16 @@ function cis_connector_role_access($roles) {
 }
 
 /**
- * Prepare an entity for transmission to a webservice
- * This primary involves "crushing" the item into an array
+ * Prepare an entity for transmission to a webservice.
+ *
+ * This primary converts an entity object to an array.
+ * @param $entity
+ *   any entity you wish to convert from object to array
+ *   with the intention of submitting to a remote site
+ *   for saving.  This wipes values that are typical with
+ *   nodes but should work with any entity type.
+ * @return $ary
+ *   The entity cleaned up and smashed into an array.
  */
 function _cis_connection_prepare_entity($entity) {
   $ary = (array) $entity;
@@ -595,7 +819,7 @@ function _cis_connection_prepare_entity($entity) {
         unset($ary[$key]);
       }
       elseif (is_array($val)) {
-        // TODO: support multiple field values
+        // @todo support multiple field values
         if (isset($val['und'][0]['value'])) {
           $ary[$key] = $val['und'][0]['value'];
         }
@@ -617,6 +841,17 @@ function _cis_connection_prepare_entity($entity) {
 
 /**
  * Collect all remote entities for sending off items to other buckets.
+ *
+ * @param $type
+ *   (optional) entity type to filter the list to.
+ * @param $bundle
+ *   (optional) bundle within an entity type to filter to.
+ * @return $remote
+ *   An array of all entity types and bundles that are
+ *   saved and created in this site but should also
+ *   be shipped off to another site via a web service
+ *   call.
+ * @todo review if this is something we want to continue supporting.
  */
 function _cis_connector_remote_entities($type = NULL, $bundle = NULL) {
   $items = module_invoke_all('cis_connected_entity');
@@ -659,7 +894,9 @@ function cis_connector_field_info_alter(&$info) {
 
 /**
  * Implements hook_form_FORMID_alter().
- * Adds settings for controlling how fields are handled for remote entities
+ *
+ * Adds settings for controlling how fields are
+ * handled for remote entities.
  */
 function cis_connector_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
   // check if this entity is allowed to utilize this method
@@ -685,6 +922,10 @@ function cis_connector_form_field_ui_field_edit_form_alter(&$form, &$form_state)
 
 /**
  * Implements hook_entity_presave().
+ *
+ * @todo review this concept as it may be making
+ * too many assumptions about how entity save works
+ * when distributed across systems.
  */
 function cis_connector_entity_presave($entity, $type) {
   // only run this when it's our form deployed remotely
@@ -692,7 +933,7 @@ function cis_connector_entity_presave($entity, $type) {
   // ensure we have bundle keys at least after loading info
   if (isset($info['bundle keys']['bundle']) && isset($entity->{$info['bundle keys']['bundle']})) {
     $rem = _cis_connector_remote_entities($type, $entity->{$info['bundle keys']['bundle']});
-    // TODO: this appears to be a glitch in RestWS
+    // @todo this appears to be a glitch in RestWS
     // How could an item be submitted as annonymous if the user isn't?
 
     // don't allow annonymous submissions from outside system
@@ -724,7 +965,7 @@ function cis_connector_entity_presave($entity, $type) {
         if ($item['save'] == CIS_CONNECTOR_ENTITY_REMOTE_ONLY) {
           // try to wipe the entity and hope it doesn't cause an issue
           $entity = NULL;
-          // TODO: May need to issue drupal_goto to truly
+          // @todo May need to issue drupal_goto to truly
           // hijack the operation. look into running this hook
           // last to avoid possible issues with other projects
         }
@@ -761,9 +1002,22 @@ function cis_connector_form_alter(&$form, &$form_state, $form_id) {
 }
 
 /**
- * Simple mail function.
+ * Simple mail function to send an email.
+ *
+ * This is a wrapper above drupal_mail_system() to
+ * simplify the process of sending an email as
+ * drupal's default mailer call is needlessly complex.
+ *
+ * @param $to
+ *   Email address to send to.
+ * @param $message_subject
+ *   Subject of the email.
+ * @param $message_body
+ *   Message to send.
+ * @param $from
+ *   Who to say it is from.
  */
-function _cis_connector_simple_mail($to, $message_subject, $message_body, $from) {  
+function _cis_connector_simple_mail($to, $message_subject, $message_body, $from) {
   // These value can remain empty.
   $my_module = 'cis';
   $my_mail_token = 'simplemail';
@@ -779,12 +1033,12 @@ function _cis_connector_simple_mail($to, $message_subject, $message_body, $from)
     ),
   );
   $system = drupal_mail_system($my_module, $my_mail_token);
-  // The format function must be called before calling the mail function. 
+  // The format function must be called before calling the mail function
   $message = $system->format($message);
   if ($system->mail($message)) {
     // do something when successful
   }
   else {
-    // do something if it fails
+    // @todo do something if the mail fails
   }
 }

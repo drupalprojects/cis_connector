@@ -1,12 +1,10 @@
-﻿/*********************************************************************************************************/
-/**
- * icor plugin for CKEditor 3.x
+﻿/**
+ * @file
+ * icor plugin for CKEditor 4.x
  */
-/*********************************************************************************************************/
-
 CKEDITOR.dialog.add("icor",function(e){  
   return{
-    title:"Interactive Object",
+    title:"Interactive object",
     resizable : CKEDITOR.DIALOG_RESIZE_BOTH,
     minWidth:925,
     minHeight:525,

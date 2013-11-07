@@ -1,27 +1,34 @@
 <?php
-
 /**
+ * @file
+ * Structure and example of shortcodes to generate.
+ *
  * This is the basic structure of the Version 1 CIS shortcode.
  * This specification can be added to without much issue
  * hence it is versioned for when newer connotations of data
  * to abstract are required.  Below are some example codes.
+ *
+ * @param cis
+ *   api version currently in use for this shortcode.
+ * @param tool
+ *   cis tool name
+ * @param item
+ *   tag or id
+ * @param render
+ *   (optional) iframe or link, defaults to iframe
+ * @param item_type
+ *   (optional) tag or id, defaults to id
+ * @param section
+ *   (optional) section to query, useful with tag, defaults to _user _context
+ * @param entity_type
+ *   (optional) entity type for the id, defaults to node
+ * @param entity_bundle
+ *   (optional) bundle for the id, default to NULL
  */
-/*
-  [
-     cis={api version} *requried
-     tool={cis tool name} *required
-    item={tag or id} *required
-    render={iframe or link; default: iframe}
-    item_type={tag or id; default: id}
-    section={section to query, useful with tag; default: _user _context}
-    entity_type={entity type for the id; default: node}
-    entity_bundle={bundle for the id; default: NULL}
-    render_callback={function to handle values; default: NULL}
-  ]
 
-*/
-/** 
+/**
  * Code 1 example
+ *
  * API version 1
  * connect to the associated MOOC distribution
  * pull item (type assumed node) number 12
@@ -29,8 +36,9 @@
  */
 $code1 = '[cis=v1 tool=mooc item=12]';
 
-/** 
+/**
  * Code 2 example
+ *
  * API version 1
  * connect to the associated CLE distribution
  * pull the (assumed node) item tagged as "cool Stuff"

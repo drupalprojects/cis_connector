@@ -3,7 +3,7 @@
  * @file
  * Code for the CIS Section feature.
  */
- 
+
 define('CIS_SECTION_STUDENT', 'student');
 define('CIS_SECTION_PAST_STUDENT', 'past student');
 
@@ -44,7 +44,7 @@ function cis_section_cron() {
             // this is the magic that binds students to sections automatically
             // and allows the entire network to work as an OG dark-net :)
             if (isset($section['field_access_string']['und']) && count($section['field_access_string']['und']) > 0) {
-              foreach($section['field_access_string']['und'] as $string) {
+              foreach ($section['field_access_string']['und'] as $string) {
                 $section_strings[$string['safe_value']] = $string['safe_value'];
               }
             }
@@ -107,10 +107,10 @@ function cis_section_entity_presave($entity, $type) {
   // and they were created by the job which triggered this
   // being created in the first place.  Edge case but very
   // useful for alleviating workflow when a student is denied
-  // access to the course from an LMS vendor / data source 
+  // access to the course from an LMS vendor / data source
   // and we need to alert IDs about it without forcing action.
-  if ($type == 'user' && 
-      isset($_GET['force_roster_sync']) && 
+  if ($type == 'user' &&
+      isset($_GET['force_roster_sync']) &&
       isset($_GET['cis_contact']) &&
       $_GET['cis_contact'] == $entity->mail
     ) {
@@ -130,9 +130,16 @@ function cis_section_entity_presave($entity, $type) {
 
 /**
  * Return all found sections as these are valid for switching
+ *
  * This is essentially a list of the current user's groups
+ *
+ * @param $active_only
+ *   (optional) Whether or not to return only the active sections
+ *   this user is a part of.
+ * @return $sections
+ *   array of section key paired as key => name
  */
-function cis_section_all_sections($active_only = false) {
+function cis_section_all_sections($active_only = FALSE) {
   $sections = array();
   // select field section data
   $query = new EntityFieldQuery();
@@ -164,8 +171,20 @@ function cis_section_all_sections($active_only = false) {
 }
 
 /**
- * Assemble the roster, we must have another module implement roster code
- * to use this.
+ * Assemble the roster
+ *
+ * We must have another module implement roster code to use this.
+ *
+ * @param $sections
+ *   An array of sections to assemble the roster for.
+ * @param $activated
+ *   (optional) Special case where a section was manually
+ *   told to be activated via save or the UI. In this case
+ *   we ignore semester boundaries and sync this roster regardless.
+ * @return $roster
+ *   an array of users keyed by section and their role.
+ *
+ * @see _cis_connector_transaction()
  */
 function cis_section_assemble_roster($sections, $activated = FALSE) {
   // build roster based on an array of sections
@@ -174,7 +193,7 @@ function cis_section_assemble_roster($sections, $activated = FALSE) {
     // ensure we only sync things that should be sycned
     // this helps elminate purely developmental section spaces like masters
     // as well as sections primed for setup but not active
-    // as the per the semester dates 
+    // as the per the semester dates
     $dates = _cis_connector_transaction('section_dates', 'default', array(), $section);
     // only perform this if we have dates stored
     if (isset($dates['end']) && isset($dates['start'])) {
@@ -186,7 +205,7 @@ function cis_section_assemble_roster($sections, $activated = FALSE) {
       // this helps allow for logistical setup of a section prior to the semester
       // start while removing that section's ability to sync its roster.
       // this reduces strain on APIs via needless calls
-      else if ($dates['start'] > REQUEST_TIME || $dates['end'] < REQUEST_TIME) {
+      elseif ($dates['start'] > REQUEST_TIME || $dates['end'] < REQUEST_TIME) {
         $nid = _cis_section_load_section_by_id($section);
         $node = node_load($nid);
         // mark this as inactive, this will trigger the cis_section clean up on node_update hook
@@ -307,7 +326,8 @@ function _cis_section_create_accounts($roster) {
       // convert role name to object bc of stupid storage convention for account creation
       $role = user_role_load_by_name($role_name);
       // try and load the account first
-      if (!($account = user_load_by_name($name))) {
+      // @ignore druplart_conditional_assignment
+      if (!$account = user_load_by_name($name)) {
         $fields = array(
           'name' => $name,
           'pass' => user_password(20),
@@ -319,7 +339,7 @@ function _cis_section_create_accounts($roster) {
         );
         // allow other projects to update part of the user
         drupal_alter('cis_section_user_insert', $fields);
-        //the first parameter is left blank so a new user is created
+        // the first parameter is left blank so a new user is created
         $account = user_save('', $fields);
       }
       else {

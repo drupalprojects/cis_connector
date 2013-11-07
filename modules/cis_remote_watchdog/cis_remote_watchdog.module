@@ -1,14 +1,20 @@
 <?php
 /**
+ * @file
+ * Reroute watchdog logs from this site to a related service.
+ */
+
+/**
  * Implements hook_cis_service_registry_alter().
  *
- * This is a rare edgecase where you'd want to modify the registry.
+ * This is a rare edgecase where you'd want to modify the registry
+ * and do so contextually.
  */
 function cis_remote_watchdog_cis_service_registry_alter(&$registry) {
   $distro = variable_get('install_profile', FALSE);
   // make sure this distro is valid in our network
   if (isset($registry[$distro])) {
-    // divert to a connection address relative to the distro implementing it 
+    // divert to a connection address relative to the distro implementing it
     $registry['remote_watchdog']['service_address'] = $registry[$distro]['service_address'];
     $registry['remote_watchdog']['address'] = $registry[$distro]['address'];
   }

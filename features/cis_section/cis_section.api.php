@@ -1,8 +1,15 @@
 <?php
-// passing force_roster_sync via cron to any site running this code
-// additionally passing cis_contact will email someone automatically
-// based on the data stored in resource with machine name lms_out_of_sync
-// will skip it's normal sync routine and run immediately to sync the roster
+/**
+ * @file
+ * CIS Section API
+ *
+ * Note, passing `force_roster_sync` via cron will force
+ * rosters to sync up. Also passing cis_contact will email
+ * someone automatically if they are added via a forced sync
+ * routine. This is useful for notifying someone that
+ * previously didn't have access and triggered an access
+ * denied that they now have access to the system.
+ */
 
 /**
  * Implements hook_cis_section_activate().
@@ -17,7 +24,7 @@
 function hook_section_activate() {
   return array('_cis_section_activate_callback');
 }
- 
+
 /**
  * Example callback for activating a section
  *
@@ -85,7 +92,8 @@ function hook_cis_section_user_insert_alter(&$fields) {
 
 /**
  * Implements hook_cis_section_list_alter().
- * Allow for modification of the system reported section list
+ *
+ * Allow for modification of the system reported section list.
  */
 function hook_cis_section_list_alter(&$sections) {
   // add a section called default

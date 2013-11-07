@@ -10,9 +10,9 @@ include_once 'cis_service_lti.features.inc';
  * Recreate the lti consumer locally.
  */
 function _cis_service_lti_get_consumer() {
-  // return the lti details for the associated service 
+  // return the lti details for the associated service
+  // @ignore druplart_conditional_assignment
   if ($settings = _cis_connector_build_registry('cis')) {
-    //$address = _cis_connector_format_address($settings);
     $address = $settings['protocol'] . '://' . $settings['address'];
   }
   if (!$settings) {

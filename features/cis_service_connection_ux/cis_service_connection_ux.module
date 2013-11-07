@@ -21,6 +21,7 @@ function cis_service_connection_ux_menu() {
 
   $items['admin/config/system/course-settings'] = array(
     'title' => 'Course settings',
+    'description' => 'Change system settings for your course.',
     'type' => MENU_NORMAL_ITEM,
     'page callback' => 'drupal_get_form',
     'page arguments' => array('cis_service_connection_ux_form'),
@@ -41,7 +42,7 @@ function cis_service_connection_ux_form($form, $form_state) {
     '#type' => 'fieldset',
     '#collapsed' => '0',
     '#collapsible' => '1',
-    '#title' => t('Course Details'),
+    '#title' => t('Course details'),
     '#weight' => '0',
   );
   $form['site_information']['site_name'] = array(
@@ -57,7 +58,7 @@ function cis_service_connection_ux_form($form, $form_state) {
     '#weight' => '1',
     '#description' => t('Title of the course'),
     '#type' => 'textfield',
-    '#title' => t('Course Title'),
+    '#title' => t('Course title'),
     '#required' => '1',
   );
   $form['site_information']['site_frontpage'] = array(

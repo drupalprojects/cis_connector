@@ -1,10 +1,11 @@
 <?php
 /**
  * @file
- * Install routine to set the front page to the default defined by using this module
+ * Install routine to set the front page to a default.
  */
+
 /**
- * Implementation of hook_install().
+ * Implements hook_install().
  */
 function cis_service_connection_install() {
   // set front page to welcome-letter
@@ -12,7 +13,7 @@ function cis_service_connection_install() {
 }
 
 /**
- * Implementation of hook_uninstall().
+ * Implements hook_uninstall().
  */
 function cis_service_connection_uninstall() {
   // unset the front page if its the welcome-letter

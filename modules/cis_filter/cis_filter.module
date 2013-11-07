@@ -1,4 +1,8 @@
 <?php
+/**
+ * @file
+ * Input filter to process CIS style shortcodes.
+ */
 define('CIS_FILTER_INVALID', '-invalid call-');
 
 /**
@@ -7,7 +11,7 @@ define('CIS_FILTER_INVALID', '-invalid call-');
 function cis_filter_filter_info() {
   $filters = array();
   $filters['cis_filter'] = array(
-    'title' => t('CIS Filter'),
+    'title' => t('CIS filter'),
     'description' => t('Substitutes [cis] shortcodes with rendered output.'),
     'process callback' => '_cis_filter_process',
     'tips callback' => '_cis_filter_tips',
@@ -78,36 +82,29 @@ function theme_cis_filter_render($vars) {
       'item_type' => 'id',
       'entity_type' => 'node',
       'entity_bundle' => NULL,
-      'render_callback' => NULL,
     ), $vars['settings']);
     // spec requires tool and item be set
     if (isset($code['tool']) && isset($code['item'])) {
+      // @ignore druplart_conditional_assignment
       if ($settings = _cis_connector_build_registry($code['tool'])) {
-        // support custom rendering callbacks
-        if (empty($code['render_callback'])) {
-          $instance = '/';
-          if (isset($settings['instance']) && $settings['instance']) {
-            $instance = base_path();
-          }
-          $link = _cis_connector_format_address($settings, $instance, 'front');
-          switch ($code['render']) {
-            case 'link':
-              // link based request requires RESTful webservice
-              $url = $code['entity_type'] . '/' . $code['item'] . '.json';
-              // uses property to allow for rapid load of a complex resource
-              $url .= '?deep-load-refs=file';
-              // fallback in case there was nothing to query
-              $link .= $code['entity_type'] . '/' . $code['item'];
-              $result = _cis_filter_link_render($url, $code, $link);
-            break;
-            case 'iframe':
-              $result = _cis_filter_iframe_render($link, $code);
-            break;
-          }
+        $instance = '/';
+        if (isset($settings['instance']) && $settings['instance']) {
+          $instance = base_path();
         }
-        else {
-          // allow custom rendering of the entire thing
-          $result = call_user_func($code['render_callback'], $code);
+        $link = _cis_connector_format_address($settings, $instance, 'front');
+        switch ($code['render']) {
+          case 'link':
+            // link based request requires RESTful webservice
+            $url = $code['entity_type'] . '/' . $code['item'] . '.json';
+            // uses property to allow for rapid load of a complex resource
+            $url .= '?deep-load-refs=file';
+            // fallback in case there was nothing to query
+            $link .= $code['entity_type'] . '/' . $code['item'];
+            $result = _cis_filter_link_render($url, $code, $link);
+          break;
+          case 'iframe':
+            $result = _cis_filter_iframe_render($link, $code);
+          break;
         }
         return $result;
       }
@@ -135,7 +132,7 @@ function _cis_filter_link_render($url, $code, $link = '') {
       if (isset($code['width'])) {
         $width = 'width="' . $code['width'] . '"';
       }
-      if(isset($code['height'])) {
+      if (isset($code['height'])) {
         $height = 'height="' . $code['height'] . '"';
       }
       $alt = '';
@@ -148,16 +145,19 @@ function _cis_filter_link_render($url, $code, $link = '') {
       if (isset($code['alt'])) {
         $alt = $code['alt'];
       }
+      // @todo investigate a theme function for this
       $link = "<img src=\"$path\" $width $height alt=\"$alt\" title=\"$title\" />";
     }
-    else if (isset($code['text'])) {
+    elseif (isset($code['text'])) {
+      // @todo investigate a theme function for this
       $link = l(t('@t', array('@t' => $code['text'])), $path);
     }
     else {
-      
+      // we have nothing to do because something was wrong
     }
   }
-  else if (isset($code['text'])) {
+  elseif (isset($code['text'])) {
+    // @todo investigate a theme function for this
     $link = l(t('@t', array('@t' => $code['text'])), $link);
   }
   return $link;
@@ -172,7 +172,7 @@ function _cis_filter_iframe_render($link, $code) {
     $width = $code['width'];
   }
   $height = '300';
-  if(isset($code['height'])) {
+  if (isset($code['height'])) {
     $height = $code['height'];
   }
   // ids we render via entity iframe, otherwise fallback

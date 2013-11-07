@@ -16,5 +16,5 @@ function cis_service_icor_features_override_default_overrides() {
     'icor' => 1,
   );
 
- return $overrides;
+  return $overrides;
 }

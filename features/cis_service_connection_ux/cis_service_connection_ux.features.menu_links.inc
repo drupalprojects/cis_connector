@@ -66,7 +66,7 @@ function cis_service_connection_ux_menu_default_menu_links() {
   );
   // Translatables
   // Included for use with string extractors like potx.
-  t('Course Settings');
+  t('Course settings');
   t('Performance');
   t('Theme');
 

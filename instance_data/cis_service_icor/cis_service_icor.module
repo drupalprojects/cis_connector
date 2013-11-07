@@ -15,9 +15,12 @@ function cis_service_icor_init() {
     drupal_add_js(drupal_get_path('module', 'cis_service_icor') . '/js/cis_service_icor.js');
   }
   // add icorpath setting
-  if (arg(0) == 'node' && arg(2) == 'edit' && $settings = _cis_connector_build_registry('icor')) {
-    $path = $settings['protocol'] . '://' . $settings['address'] . base_path();
-    drupal_add_js(array('icorPath' => $path), 'setting');
+  if (arg(0) == 'node' && arg(2) == 'edit') {
+    // @ignore druplart_conditional_assignment
+    if ($settings = _cis_connector_build_registry('icor')) {
+      $path = $settings['protocol'] . '://' . $settings['address'] . base_path();
+      drupal_add_js(array('icorPath' => $path), 'setting');
+    }
   }
 }
 
@@ -37,6 +40,7 @@ function cis_service_icor_custom_theme() {
 function cis_service_icor_wysiwyg_plugin($editor, $version) {
   // load icor settings if it exists
   $path = '';
+  // @ignore druplart_conditional_assignment
   if ($settings = _cis_connector_build_registry('icor')) {
     $path = $settings['protocol'] . '://' . $settings['address'] . '/' . base_path();
   }
