@@ -1,33 +1,16 @@
 <?php
+/**
+ * @file
+ * Define links for a unified experience across systems.
+ */
 define('CIS_SERVICE_CONNECTION_SYNC_FREQUENCY', 1);
 define('CIS_SERVICE_CONNECTION_HOMEPAGE', 'welcome_page');
-
-/**
- * Implements hook_init().
- */
-function cis_service_connection_init() {}
 
 /**
  * return array of links we support
  */
 function _cis_service_connection_links() {
   return array('welcome_page', 'syllabus', 'course-help', 'resources');
-}
-
-/**
- * Implements hook_thumbnav_widget().
- */
-function cis_service_connection_thumbnav_widget() {
-  $widgets = array(
-    'cis_service_connection_inst_contact' => array(
-      'icon' => base_path() . drupal_get_path('module', 'cis_service_connection') . '/images/inst_contact.png',
-      'title' => t('Instructor contact'),
-      'inc' => drupal_get_path('module', 'cis_service_connection') . '/js/cis_service_connection_inst_contact.js',
-      'weight' => 1,
-      'side' => 'right',
-    )
-  );
-  return $widgets;
 }
 
 /**
@@ -46,7 +29,7 @@ function cis_service_connection_block_info() {
     'section_context_changer' => array(
       'info' => t('Change Section context'),
       'cache' => DRUPAL_CACHE_PER_USER,
-    ), 
+    ),
   );
   return $blocks;
 }
@@ -75,8 +58,6 @@ function cis_service_connection_block_view($delta = '') {
 
 /**
  * Implements hook_permission().
- *
- * @return array
  */
 function cis_service_connection_permission() {
   return array(
@@ -249,7 +230,7 @@ function cis_service_connection_cron() {
     // delete this variable so this doesn't run ever again
     variable_del('cis_service_connection_initial');
   }
-  
+
   // if last sync is less then the update interval, update
   if ((REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval['interval']) {
     // select the service instance in question based on uuid
@@ -293,6 +274,7 @@ function cis_service_connection_get_footer_language() {
   $query = array('type' => 'resource', 'field_machine_name' => 'footer_language');
   $response = _cis_connection_query($query);
   // render text applying the input filter requested
+  // @ignore coder_tough_love_14
   $text = str_replace('!current', date('Y'), $response['list'][0]['body']['value']);
   // load box object
   $footer = boxes_box_load('site_footer');
@@ -399,7 +381,7 @@ function cis_service_connection_block_section_outline() {
  * Callback for instructor contact block content.
  */
 function cis_service_connection_block_instructor_contact() {
-  //pull contact info from cis
+  // pull contact info from cis
   $info = _cis_connector_transaction('contact_info');
   // ensure we have contact info to display
   if (!empty($info)) {
@@ -450,7 +432,12 @@ function cis_service_connection_block_section_context_changer_form_submit($form,
 }
 
 /**
- * Return a group node when passed a section
+ * Return a group node when passed a section string.
+ *
+ * @param $section
+ *   (optional) section string to look up.
+ * @return $section
+ *   a fully loaded section entity.
  */
 function cis_service_connection_load_group($section = NULL) {
   // allow for loading of current context
@@ -487,6 +474,9 @@ function cis_service_connection_load_group($section = NULL) {
  *
  * Accept a section name and look up an associated organic group.
  * Read in the group's user list and set all student roles to past student
+ *
+ * @param $section
+ *   string section to expire roles for.
  */
 function _cis_service_connection_expire_roles($section) {
   // full group node for this section
@@ -503,12 +493,17 @@ function _cis_service_connection_expire_roles($section) {
 
 /**
  * Get all students of a group.
+ *
+ * @param $gid
+ *   group / section entity id.
+ * @return array
+ *   list of user ids
  */
 function _cis_service_connection_get_users_in_group($gid) {
   // load full student role object by name
   $role = user_role_load_by_name('student');
   // return membership to this group that are students
-  $query = db_select('og_membership', 'ogm'); 
+  $query = db_select('og_membership', 'ogm');
   // join user roles and memberships
   $query->join('users_roles', 'ur', 'ur.uid = ogm.etid');
   // only this group
