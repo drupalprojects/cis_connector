@@ -392,9 +392,33 @@ function _cis_connector_section_context($account = NULL) {
       $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
     }
     else {
-      // @todo should probably have better handling as to what the default is
-      // essentially group / section this is an error when running this
-      $section = 'default';
+      // see if we are an administrative account that might be missing access
+      // to a group but yet clearly could be in the master
+      if ($account->uid == 1 || array_intersect(array('administrator', 'instructor', 'staff'), array_values($account->roles))) {
+        $query = new EntityFieldQuery();
+        // pull all nodes
+        $query->entityCondition('entity_type', 'node')
+        // that are sections
+        ->entityCondition('bundle', 'section')
+        // that are published
+        ->propertyCondition('status', 1)
+        // that have a section like master_
+        ->fieldCondition('field_section_id', 'value', 'master_%', 'like')
+        ->addMetaData('account', user_load(1));
+        // store results
+        $result = $query->execute();
+        // ensure we have results
+        if (isset($result['node'])) {
+          $nids = array_keys($result['node']);
+          $sections = entity_load('node', $nids);
+          $group = array_pop($sections);
+          $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
+        }
+      }
+      else {
+        // @todo should probably have better handling as to what the default is
+        $section = 'default';
+      }
     }
   }
   return $section;
