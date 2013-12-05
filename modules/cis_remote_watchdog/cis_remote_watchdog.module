@@ -15,8 +15,8 @@ function cis_remote_watchdog_cis_service_registry_alter(&$registry) {
   // make sure this distro is valid in our network
   if (isset($registry[$distro])) {
     // divert to a connection address relative to the distro implementing it
-    $registry['remote_watchdog']['service_address'] = $registry[$distro]['service_address'];
-    $registry['remote_watchdog']['address'] = $registry[$distro]['address'];
+    $registry['remote_watchdog']['service_address'] = $registry[$distro]['service_address'] . '/watchdog';
+    $registry['remote_watchdog']['address'] = $registry[$distro]['address'] . '/watchdog';
   }
 }
 
