@@ -37,7 +37,7 @@ function cis_connector_restws_meta_controls_alter(&$controls) {
  */
 function _cis_connector_build_registry($bucket = NULL) {
   // statically cache future calls
-  $settings = &drupal_static(__FUNCTION__ . $bucket);
+  $settings = &drupal_static(__FUNCTION__);
   if (!isset($settings)) {
     // invoke special hook for registry settings
     $settings = module_invoke_all('cis_service_registry');
@@ -746,6 +746,7 @@ function _cis_connector_request($url, $options = array(), $bucket = 'cis', $cach
   // @ignore production_code
   }
   */
+
   return $data;
 }
 
