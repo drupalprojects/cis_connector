@@ -28,7 +28,9 @@ function cis_section_views_default_views() {
   $handler->display->display_options['access']['type'] = 'role';
   $handler->display->display_options['access']['role'] = array(
     9 => '9',
+    4 => '4',
     6 => '6',
+    8 => '8',
   );
   $handler->display->display_options['cache']['type'] = 'none';
   $handler->display->display_options['query']['type'] = 'views_query';
@@ -106,7 +108,7 @@ function cis_section_views_default_views() {
   $handler->display->display_options['fields']['field_section_id']['id'] = 'field_section_id';
   $handler->display->display_options['fields']['field_section_id']['table'] = 'field_data_field_section_id';
   $handler->display->display_options['fields']['field_section_id']['field'] = 'field_section_id';
-  /* Field: Content: Instructional Outlines */
+  /* Field: Content: Instructional outlines */
   $handler->display->display_options['fields']['field_instructional_outlines']['id'] = 'field_instructional_outlines';
   $handler->display->display_options['fields']['field_instructional_outlines']['table'] = 'field_data_field_instructional_outlines';
   $handler->display->display_options['fields']['field_instructional_outlines']['field'] = 'field_instructional_outlines';
