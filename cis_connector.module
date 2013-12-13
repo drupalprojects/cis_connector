@@ -413,6 +413,12 @@ function _cis_connector_section_context($account = NULL) {
           $sections = entity_load('node', $nids);
           $group = array_pop($sections);
           $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
+          // add person to this group automatically
+          $values = array(
+            'entity_type' => 'user',
+            'entity' => $account,
+          );
+          og_group('node',$group->nid, $values);
         }
       }
       else {
