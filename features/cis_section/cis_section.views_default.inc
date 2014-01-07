@@ -27,7 +27,6 @@ function cis_section_views_default_views() {
   $handler->display->display_options['group_by'] = TRUE;
   $handler->display->display_options['access']['type'] = 'role';
   $handler->display->display_options['access']['role'] = array(
-    9 => '9',
     4 => '4',
     6 => '6',
     8 => '8',
