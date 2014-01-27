@@ -422,8 +422,44 @@ function _cis_connector_section_context($account = NULL) {
         }
       }
       else {
-        // @todo should probably have better handling as to what the default is
-        $section = 'default';
+        // last ditch effort, check for ability to see section switcher
+        // this implies a role that should be able to see the way sections
+        // are setup and so we need to just pick the best available option
+        if (user_access('switch section context')) {
+          $query = new EntityFieldQuery();
+          // pull all nodes
+          $query->entityCondition('entity_type', 'node')
+          // that are sections
+          ->entityCondition('bundle', 'section')
+          // that are published
+          ->propertyCondition('status', 1)
+          // that are active
+          ->fieldCondition('field_cis_active', 'value', '1', '=')
+          // ordered by date created
+          ->propertyOrderBy('created', 'DESC')
+          // load all possible results in system
+          ->addMetaData('account', user_load(1))
+          // only get the top one though
+          ->range(0, 1);
+          // store results
+          $result = $query->execute();
+          // ensure we have results
+          if (isset($result['node'])) {
+            $nids = array_keys($result['node']);
+            $sections = entity_load('node', $nids);
+            $group = array_pop($sections);
+            $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
+            // also hijack the global session so that the form is auto populated
+            // with a reasonable value instead of magically giving a section
+            // association.  This means they won't be able to "unset" their
+            // made up section affiliation but that's ok.
+            $_SESSION['cis_section_context'] = $section;
+          }
+        }
+        else {
+          // @todo this use case has no positive outcome
+          $section = 'default';
+        }
       }
     }
   }
