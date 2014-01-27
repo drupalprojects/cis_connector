@@ -76,8 +76,10 @@ function cis_section_cron() {
   // test for if we should sync w/ our roster provider
   $frequency = variable_get('cis_service_connection_sync_frequency', CIS_SERVICE_CONNECTION_SYNC_FREQUENCY);
   $interval = 86400 * $frequency;
+  // always sync if this call just came from drush
   // sync this course with LMS based on section data if time has passed
-  if (isset($_GET['force_roster_sync']) || (REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval) {
+  // sync if there's an argument asking to force sync
+  if (drupal_is_cli() || isset($_GET['force_roster_sync']) || (REQUEST_TIME - variable_get('cis_service_connection_last_sync', 0)) > $interval) {
     // simple section pull based on those included locally
     $sections = array_keys(cis_section_all_sections(TRUE));
     // pull the roster together
