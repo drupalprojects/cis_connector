@@ -90,6 +90,12 @@ function theme_cis_filter_render($vars) {
         $instance = '/';
         if (isset($settings['instance']) && $settings['instance']) {
           $instance = base_path();
+          //test for non-subdomain installation
+          $test = explode('/', $instance);
+          if (count($test) == 4) {
+            $instance = '/' . $test[2] . '/';
+          }
+        }
         }
         $link = _cis_connector_format_address($settings, $instance, 'front');
         switch ($code['render']) {
@@ -100,7 +106,7 @@ function theme_cis_filter_render($vars) {
             $url .= '?deep-load-refs=file';
             // fallback in case there was nothing to query
             $link .= $code['entity_type'] . '/' . $code['item'];
-            $result = _cis_filter_link_render($url, $code, $link);
+            $result = _cis_filter_link_render($url, $code, $link, $instance);
           break;
           case 'iframe':
             $result = _cis_filter_iframe_render($link, $code);
@@ -117,9 +123,10 @@ function theme_cis_filter_render($vars) {
 /**
  * Default callback for rendering a link to the item
  */
-function _cis_filter_link_render($url, $code, $link = '') {
+function _cis_filter_link_render($url, $code, $link = '', $instance = '/') {
   // request data
-  $response = _cis_connector_request($url, array(), $code['tool']);
+  $instance = str_replace('/', '', $instance);
+  $response = _cis_connector_request($instance . '/' . $url, array(), $code['tool']);
   $data = drupal_json_decode($response->data);
   // if we have the field property set return a link
   if (isset($code['field']) && isset($data[$code['field']]['uri'])) {
