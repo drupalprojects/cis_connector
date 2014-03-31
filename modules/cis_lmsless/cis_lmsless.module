@@ -5,6 +5,22 @@
  */
 
 /**
+ * Implements hook_permission().
+ */
+function cis_lmsless_permission() {
+  return array(
+    'view lmsless bar' =>  array(
+      'title' => t('View LMSless bar'),
+      'description' => t('Provides context as to what system you are in and quick links.'),
+    ),
+    'view lmsless cis link' =>  array(
+      'title' => t('View link to CIS space'),
+      'description' => t('This shows the shortcut to the marketing space in CIS.'),
+    ),
+  );
+}
+
+/**
  * Implements hook_page_alter().
  */
 function cis_lmsless_page_alter(&$page) {
@@ -14,6 +30,14 @@ function cis_lmsless_page_alter(&$page) {
     '#markup' => _cis_lmsless_assemble(),
     '#weight' => 1000,
   );
+  if (user_access('view lmsless bar') && !path_is_admin(current_path())) {
+    // append output to page via normal page rendering
+    $page['page_bottom']['lmsless'] = array(
+      '#type' => 'markup',
+      '#markup' => _cis_lmsless_assemble(),
+      '#weight' => 1000,
+    );
+  }
 }
 
 /**
