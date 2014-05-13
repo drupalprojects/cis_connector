@@ -71,6 +71,7 @@ function _cis_lmsless_assemble() {
       'url' => '#',
       'machine_name' => $distro,
     );
+    $vars['active'] = $list[$distro];
   }
   else {
     foreach ($services as $service) {
@@ -95,6 +96,7 @@ function _cis_lmsless_assemble() {
     // see if this service matches the current tool
     if ($item['url'] == $GLOBALS['base_url'] . '/') {
       $tmp = $item;
+      $vars['active'] = $item;
       $tmp['url'] = '#';
       unset($list[$key]);
       array_unshift($list, $tmp);
@@ -116,6 +118,7 @@ function cis_lmsless_theme() {
         'front_page' => 'node',
         'site_name' => t('Service'),
         'section' => t('Master Section'),
+        'active' => array(),
         'services' => array(),
       ),
       'render element' => 'element',
