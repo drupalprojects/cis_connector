@@ -548,7 +548,16 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // make sure it got data
       if (!empty($cis_section_item)) {
         $list = '';
-        if ($request == 'resources') {
+        if ($request == 'help') {
+          foreach ($cis_section_item['list'][0]['field_resources'] as $reid) {
+            $resource = _cis_connection_object($reid['id'], $reid['resource']);
+            if (strpos($resource['field_machine_name'], 'tech_support') === 0) {
+              $list .= '<h2>' . $resource['title'] . '</h2>';
+              $list .= $resource['body']['value'];
+            }
+          }
+        }
+        else if ($request == 'resources') {
           // display related services prior to other resources
           /*$services = _cis_connector_transaction('other_services');
           // make sure this is actually using other services
@@ -571,9 +580,17 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
         $query = array('type' => 'resource', 'field_machine_name' => $request . '_page');
         $resource_page = _cis_connection_query($query);
         // render text applying the input filter requested
-        $resource_page['list'][0]['body']['value'] .= $list;
-        // send the text with format for processing
-        $output = $resource_page['list'][0]['body'];
+        // this is for special case Bill
+        if ($request == 'help') {
+          $output = $resource_page['list'][0]['body'];
+          $output['help'] = $list;
+        }
+        else {
+          // do it the normal way that everyone wants usually except Bill
+          $resource_page['list'][0]['body']['value'] .= $list;
+          // send the text with format for processing
+          $output = $resource_page['list'][0]['body'];
+        }
       }
     break;
     case 'section_dates':
