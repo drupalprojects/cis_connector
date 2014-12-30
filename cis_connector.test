@@ -40,10 +40,6 @@ class CISConnectorTestCase extends DrupalWebTestCase {
     // assert meta controllers are working / available
     $controls = restws_meta_controls();
     $this->assertTrue((isset($controls['deep-load-refs']) && isset($controls['xml-out'])), t('CIS Required Metacontrollers active'));
-    // login so we can start to assert tests against ourself
-    $web_user = $this->drupalCreateUser(array('administer cis_connector'));
-    $this->drupalLogin($web_user);
-    $this->drupalPost('admin/config/system/cis_connector', array(), t('Create missing'));
   }
 
   /**
@@ -74,6 +70,8 @@ class CISConnectorTestCase extends DrupalWebTestCase {
     // login so we can start to assert tests against ourself
     $web_user = $this->drupalCreateUser(array('access resource user', 'access resource node'));
     $this->drupalLogin($web_user);
+    // create a new node so we have some data
+    $node = $this->drupalCreateNode();
     $this->drupalPost('node.json?deep-load-refs=user', array(), t('Request resources'));
   }
 }
