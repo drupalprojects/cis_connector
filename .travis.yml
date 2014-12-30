@@ -48,7 +48,7 @@ before_script:
   - echo -e '#!/usr/bin/env bash\nexit 0' | sudo tee /usr/sbin/sendmail
   - echo 'sendmail_path = "/usr/sbin/sendmail -t -i "' | sudo tee "/home/travis/.phpenv/versions/`php -i | grep "PHP Version" | head -n 1 | grep -o -P '\d+\.\d+\.\d+.*'`/etc/conf.d/sendmail.ini"
   # establish drupal package put in place the right way
-  - sudo mkdir -p /var/www/drupal
+  - sudo mkdir -p /var/www
   - sudo chown -R travis:travis /var/www
   # get drush recipes setup functions
   - sudo mkdir -p ~/.drush
@@ -60,8 +60,8 @@ before_script:
 script:
   # stand up drupal
   - cd /var/www
-  - drush dl drupal
-  - mv drupal-* drupal
+  - drush dl drupal-7.x
+  - mv drupal-7.x-dev drupal
   - cd drupal
   - drush site-install -y --db-url=mysql://root@localhost/travisdb --db-su='root' --db-su-pw=''
   # stand up cis_connector and run tests
