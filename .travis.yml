@@ -68,7 +68,9 @@ script:
   - mkdir -p sites/all/modules/cis_connector
   - git clone --branch 7.x-1.x https://github.com/drupalprojects/cis_connector.git sites/all/modules/cis_connector
   # enable simpletest and all CIS modules
-  - drush en regions og lti_tool_provider simpletest_cis_registry simpletest cis_* --y
+  - drush en regions og simpletest_cis_registry simpletest cis_* --y
+  # need LTI tool provider stuff here after we get library in place
+  - drush en lti_tool_provider --y
   # run CIS test group
   - drush test-run CIS
 after_script:
