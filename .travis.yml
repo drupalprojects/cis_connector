@@ -67,7 +67,8 @@ script:
   # stand up cis_connector and run tests
   - mkdir -p sites/all/modules/cis_connector
   - git clone --branch 7.x-1.x https://github.com/drupalprojects/cis_connector.git sites/all/modules/cis_connector
-  - drush en simpletest cis_connector
+  - drush dl httprl
+  - drush en simpletest cis_connector httprl
   # run tests
   - drush test-run --all
 after_script:
