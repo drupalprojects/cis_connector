@@ -60,13 +60,14 @@ before_script:
 script:
   # stand up drupal
   - cd /var/www
-  - drush dl drupal --destination=drupal
+  - drush dl drupal
+  - mv drupal-* drupal
   - cd drupal
   - drush site-install -y --db-url=mysql://root@localhost/travisdb --db-su='root' --db-su-pw=''
   # stand up cis_connector and run tests
   - mkdir -p sites/all/modules/cis_connector
   - git clone --branch 7.x-1.x https://github.com/drupalprojects/cis_connector.git sites/all/modules/cis_connector
-  - drush en cis_connector
+  - drush en simpletest cis_connector
   # run tests
   - drush test-run --all
 after_script:
