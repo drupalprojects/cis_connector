@@ -79,13 +79,13 @@ class CISConnectorTestCase extends DrupalWebTestCase {
     // build a service address call
     $method = 'service';
     $address = _cis_connector_format_address($settings['mooc'], $instance, $method);
-    $test = $settings['mooc']['protocol'] . $settings['mooc']['user'] . ':' . $settings['mooc']['pass'] . '@' . $settings['mooc']['service_address'] . $instance;
+    $test = $settings['mooc']['protocol'] . '://' . $settings['mooc']['user'] . ':' . $settings['mooc']['pass'] . '@' . $settings['mooc']['service_address'] . $instance;
     $this->assertEqual($test, $address, t('Address for service / backend calls'));
 
     // build a front facing call
     $method = 'front';
     $address = _cis_connector_format_address($settings['mooc'], $instance, $method);
-    $test = $settings['mooc']['protocol'] . $settings['mooc']['user'] . ':' . $settings['mooc']['pass'] . '@' . $settings['mooc']['address'] . $instance;
+    $test = $settings['mooc']['protocol'] . '://' . $settings['mooc']['address'] . $instance;
     $this->assertEqual($test, $address, t('Address for front facing call'));
 
     // build against something we don't support so it bricks :p
