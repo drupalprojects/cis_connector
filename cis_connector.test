@@ -43,18 +43,36 @@ class CISConnectorTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Tests for connection registry given example one.
+   * Tests for connection registry given example one to walk through.
    */
-  function testConnectionRegistry() {
+  function testBuildRegistry() {
     // Now enable the cis_connector module.
     module_enable(array('simpletest_cis_registry', 'cis_connector'), TRUE);
     drupal_flush_all_caches();
     drupal_static_reset();
-    // assert meta controllers are working / available
+    // assert buckets are set for global
     $settings = _cis_connector_build_registry();
-    $this->assertTrue(isset($settings['cis']), t('CIS Required Metacontrollers active'));
-    // @todo test the structure of the data that's supplied
-    // @todo build some addresses to ensure that those functions work correctly
+    $this->assertTrue((isset($settings['cis']) && isset($settings['mooc']) && isset($settings['cle']) && isset($settings['icor']) && isset($settings['elmsmedia']) && isset($settings['meedjum_blog'])), t('CIS registry buckets test'));
+    // assert a made up registry bucket
+    $settings = _cis_connector_build_registry('MadeUpKey');
+    $this->assertFalse($settings, t('Fake Registry entry test'));
+  }
+
+  /**
+   * Tests for functions dependent on connection registry.
+   */
+  function testRegistryConversions() {
+    // Now enable the cis_connector module.
+    module_enable(array('simpletest_cis_registry', 'cis_connector'), TRUE);
+    drupal_flush_all_caches();
+    drupal_static_reset();
+    // assert buckets are set for global
+    $settings = _cis_connector_build_registry();
+    // test that real address translation works
+    $address = 'http://localhost/sites/services/st/test100/files/image.png';
+    $realpath = _cis_connector_real_address($address);
+    $this->assertNotEqual($address, $realpath, t('Check that real address removes the services portion of the file request URL.'));
+    // @todo ensure other conversions off of the registry work
   }
 
   /**
@@ -69,7 +87,7 @@ class CISConnectorTestCase extends DrupalWebTestCase {
     $settings = _cis_connector_build_registry();
     // login so we can start to assert tests against ourself
     $web_user = $this->drupalCreateUser(array('access resource user', 'access resource node'));
-    // @todo figure out how to login successfully
+    // @todo figure out how to login successfully here
     //$this->drupalLogin($web_user);
     // create a new node so we have some data
     $node = $this->drupalCreateNode();
