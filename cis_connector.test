@@ -34,7 +34,7 @@ class CISConnectorTestCase extends DrupalWebTestCase {
   function testMetaControllers() {
     // Now enable the cis_connector module.
     module_enable(array('cis_connector', 'restws'), TRUE);
-    // @todo need to build a fake connection keychain for testing call ability
+    // @todo need to build a fake connection registry for testing call ability
     drupal_flush_all_caches();
     drupal_static_reset();
     // assert meta controllers are working / available
@@ -43,11 +43,11 @@ class CISConnectorTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Tests for connection keychain given example one.
+   * Tests for connection registry given example one.
    */
-  function testConnectionKeyChain() {
+  function testConnectionRegistry() {
     // Now enable the cis_connector module.
-    module_enable(array('simpletest_cis_keychain'), TRUE);
+    module_enable(array('simpletest_cis_registry', 'cis_connector'), TRUE);
     drupal_flush_all_caches();
     drupal_static_reset();
     // assert meta controllers are working / available
@@ -62,13 +62,13 @@ class CISConnectorTestCase extends DrupalWebTestCase {
    */
   function testDeepLoadResources() {
     // Now enable the cis_connector module.
-    module_enable(array('simpletest_cis_keychain', 'restws', 'cis_connector'), TRUE);
+    module_enable(array('simpletest_cis_registry', 'restws', 'cis_connector'), TRUE);
     drupal_flush_all_caches();
     drupal_static_reset();
     // assert meta controllers are working / available
     $settings = _cis_connector_build_registry();
     // login so we can start to assert tests against ourself
-    $web_user = $this->drupalCreateUser(array('access resource user', 'access resource node'));
+    $web_user = $this->drupalCreateUser(array('access resource node'));
     $this->drupalLogin($web_user);
     // create a new node so we have some data
     $node = $this->drupalCreateNode();
