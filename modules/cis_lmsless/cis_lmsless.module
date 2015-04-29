@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Code for CIS LMS-less to place branding on page and create experience.
+ * Code for CIS LMSless to place branding on page and create experience.
  */
 
 /**
@@ -16,6 +16,11 @@ function cis_lmsless_permission() {
     'view lmsless cis link' =>  array(
       'title' => t('View link to CIS space'),
       'description' => t('This shows the shortcut to the marketing space in CIS.'),
+    ),
+    'view course admin areas' =>  array(
+      'title' => t('View admin areas'),
+      'description' => t('This allows the user to see areas that are typically reserved for specialized roles that help in the offering of the course.'),
+      'restrict access' => TRUE,
     ),
   );
 }
@@ -106,6 +111,8 @@ function cis_lmsless_form_masquerade_block_1_alter(&$form, &$form_state, $form_i
  * @return array array of variables to pass to the theme
  */
 function _cis_lmsless_theme_vars() {
+  // @todo make a cache bin for this info or stuff it in the generic
+  // cache bin; need to do memory profiling to see for sure though.
   // ensure this doesn't load when it doesn't have to
   $vars = &drupal_static(__FUNCTION__);
   if (!isset($vars)) {
@@ -145,6 +152,28 @@ function _cis_lmsless_theme_vars() {
     $vars['resources'] = $resources;
     // throw in username
     $vars['username'] = check_plain($GLOBALS['user']->name);
+    if (user_access('view course admin areas') || isset($_SESSION['masquerading'])) {
+      $vars['admin_status_bar'] = array(
+        'course-section' => array(t('Section'), $section),
+        'current-user-id' => array(t('User'), $vars['username']),
+      );
+      if (isset($_SESSION['masquerading'])) {
+        $vars['admin_status_bar']['current-user-id'][1] .= ' ' . l(t('Switch back'), 'masquerade/unswitch', array('query' => array('token' => drupal_get_token('masquerade/unswitch'))));
+      }
+      // calculate roles
+      $tmproles = $GLOBALS['user']->roles;
+      unset($tmproles[1]);
+      unset($tmproles[2]);
+      if (!empty($tmproles)) {
+        if (count($tmproles) < 2) {
+          $roleword = t('Role');
+        }
+        else {
+          $roleword = t('Roles');
+        }
+        $vars['admin_status_bar']['user-role'] = array($roleword, implode(' ', $tmproles));
+      }
+    }
     // request a list of all other services that this section uses
     if (!$services = _cis_connector_transaction('other_services')) {
       $services = $list = array();
@@ -152,7 +181,7 @@ function _cis_lmsless_theme_vars() {
       $reg = _cis_connector_build_registry($distro);
       $tmp = explode('.', $reg['address']);
       $machine_name = $tmp[0];
-      $list[$machine_name] = array(
+      $list['Services'][$machine_name] = array(
         'title' => (isset($reg['default_title']) ? $reg['default_title'] : ''),
         'url' => '#',
         'machine_name' => $machine_name,
@@ -161,7 +190,7 @@ function _cis_lmsless_theme_vars() {
     }
     else {
       foreach ($services as $service) {
-        $list[$service['field_machine_name']] = array(
+        $list['Services'][$service['field_machine_name']] = array(
           'title' => $service['title'],
           'url' => $service['field_location']['url'] . base_path(),
           'machine_name' => $service['field_machine_name'],
@@ -171,7 +200,7 @@ function _cis_lmsless_theme_vars() {
     // add in link to the CIS location if permission exists
     // @ignore druplart_conditional_assignment
     if (user_access('view lmsless cis link') && $settings = _cis_connector_build_registry('cis')) {
-      $list['online'] = array(
+      $list['Administrative']['online'] = array(
         'title' => t('Course information system'),
         'url' => _cis_connector_format_address($settings, base_path(), 'front'),
         'machine_name' => 'online',
@@ -179,14 +208,16 @@ function _cis_lmsless_theme_vars() {
       $vars['service_option_link'] = _cis_connector_format_address($settings, base_path(), 'front') . 'service-instances';
     }
     // bump current link to the first position and drop url so its internal
-    foreach ($list as $key => $item) {
-      // see if this service matches the current tool
-      if ($item['url'] == $GLOBALS['base_url'] . '/') {
-        $tmp = $item;
-        $vars['active'] = $item;
-        $tmp['url'] = '#';
-        unset($list[$key]);
-        array_unshift($list, $tmp);
+    foreach ($list as $key => $group) {
+      foreach ($group as $key2 => $item) {
+        // see if this service matches the current tool
+        if ($item['url'] == $GLOBALS['base_url'] . '/') {
+          $tmp = $item;
+          $vars['active'] = $item;
+          $tmp['url'] = '#';
+          unset($list[$key][$key2]);
+          array_unshift($list[$key], $tmp);
+        }
       }
     }
     $vars['services'] = $list;
@@ -194,6 +225,8 @@ function _cis_lmsless_theme_vars() {
     if (module_exists('search') && user_access('search content')) {
       $vars['search'] = drupal_get_form('search_block_form');
     }
+    // allow other projects to alter these values
+    drupal_alter('cis_lmsless_theme_vars', $vars);
   }
   return $vars;
 }
@@ -217,6 +250,7 @@ function cis_lmsless_theme() {
         'user_name' => t('Account'),
         'resources' => array(),
         'tech_support' => array(),
+        'admin_status_bar' => array(),
       ),
       'render element' => 'element',
       'template' => 'templates/cis-lmsless-bar',
