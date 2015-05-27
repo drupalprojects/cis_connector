@@ -159,25 +159,43 @@ function _cis_connection_object($id = NULL, $entity_type = 'node', $format = 'js
  * service-instance in the CIS and updating the cron_key
  * in one function instead of multiple transactions.
  *
- * @param $select
+ * @param $query
  *   array of values to select in the CIS data source
  *   which supports multiple values but commonly is
  *   for the selection of 1 item
  * @param $data
  *   the data values to modify in the result set of
  *   items that were found via the select.
+ * @param  string  $id_field    entity id field like nid
+ * @param  string  $entity_type entity type requested
+ * @param  string  $bucket      system to request from and set to
+ * @param  string  $instance    any path to append
+ * @param  boolean $cached      if this should use cached results in the query
+ * @param $extra
+ *   (optional) this can contain other non-data options that the service
+ *   may use internally.  Common example could be passing 'deep-load-refs'
+ *   as the $extra variable so that entity references with in the result
+ *   set are automatically loaded.  This is a string so it can contain
+ *   any data that the current API doesn't support.
+ * @param $call_options
+ *   (optional) options beyond method. used for additional flexibility
+ *   in complex requests that may require header changes for example
+ *   transmitting files or issing non-blocking calls.
+ * @return array               array of updated results if applicable
  */
-function _cis_connection_set_data($select, $data) {
+function _cis_connection_set_data($query, $data, $id_field = 'nid', $entity_type = 'node', $bucket = 'cis', $instance = '', $cached = TRUE, $extra = '', $call_options = NULL) {
+  $saved = array();
   // query to get an information set
-  $resp = _cis_connection_query($select);
+  $result = _cis_connection_query($query, $entity_type, 'json', 'GET', $bucket, $instance, $cached);
   // if we have an item, its a valid item
-  if (!empty($resp['list'])) {
+  if (!empty($result['list'])) {
     // update all items that were found
-    foreach ($resp['list'] as $response_item) {
-      // post back to CIS
-      _cis_connection_object($response_item['nid'], 'node', NULL, 'PUT', $data);
+    foreach ($result['list'] as $response_item) {
+      // post back to place queried from
+      $saved[] = _cis_connection_object($response_item[$id_field], $entity_type, NULL, 'PUT', $data, $bucket, $instance, $extra, $call_options);
     }
   }
+  return $saved;
 }
 
 /**
@@ -339,6 +357,35 @@ function _cis_connector_real_address($path) {
 }
 
 /**
+ * Returns the current calculated course context.
+ *
+ * This function is what allows services to interpret addresses
+ * as being derived from base_path while authorities can calculate
+ * based on nodes in question. In CIS, this will load up the course
+ * node while in ELMSMedia for example it will load up cis_course.
+ * Still in systems like MOOC / Studio, it will load the base_path()
+ * function.
+ *
+ * @return string  $course  The machine name of the course.
+ *
+ * @see _cis_connector_section_context()
+ */
+function _cis_connector_course_context() {
+  // pull current menu object into a node if possible
+  if ($node = menu_get_object('node')) {
+    // we are in an authority system
+    if ($node->type == 'course' && isset($node->field_machine_name['und'][0]['value'])) {
+      return $node->field_machine_name['und'][0]['value'];
+    }
+    elseif ($node->type == 'cis_course' && isset($node->field_course_machine_name['und'][0]['value'])) {
+      return $node->field_course_machine_name['und'][0]['value'];
+    }
+  }
+  // fallback and usual use-case is base_path
+  return str_replace('/', '', base_path());
+}
+
+/**
  * Returns the user's section context from their group / global.
  *
  * This function can be thought of as the elmsln equivalent
@@ -399,7 +446,7 @@ function _cis_connector_section_context($account = NULL) {
     else {
       // see if we are an administrative account that might be missing
       // access to a group but yet clearly could be in the master
-      if (_cis_connector_role_grouping('staff', $account) || _cis_connector_role_grouping('teacher', $account)) {
+      if (_cis_connector_role_groupings(array('staff','teacher'), $account)) {
         // ensure we have section active first
         $info = entity_get_info('node');
         if (isset($info['bundles']['section'])) {
@@ -526,7 +573,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
     $section = _cis_connector_section_context();
   }
   // account for FAKE master sections that have been auto generated
-  if (strpos($section, 'master_') === 0) {
+  if (strpos($section, 'master_') === 0 && $request != 'other_services') {
     // return an empty array. this is what happened when there is a query for
     // a section that doesn't exist. this avoids it throwing an error
     return array();
@@ -554,26 +601,59 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       }
     break;
     case 'other_services':
-      // query access string based on section context
-      $query = $base_query;
-      // request the section of the user
-      $cis_section_item = _cis_connection_query($query, 'field_collection_item');
-      // return the whole section array
-      if (isset($cis_section_item['list'][0])) {
-        $section_object = $cis_section_item['list'][0];
-      }
-      // check for services defined
-      if (isset($section_object['field_services']) && is_array($section_object['field_services'])) {
-        // walk each service requesting details
-        foreach ($section_object['field_services'] as $key => $service_field) {
+      // check for section context existing; if it doesn't then
+      // we know we are in an authority system and need to make a more complex
+      // request for the systems in use by ANY section of this course
+      if (strpos($section, 'master_') === 0 || in_array($section, array('default', NULL, FALSE)) !== FALSE) {
+        $query = array(
+          'status' => 1,
+          'field_machine_name' => _cis_connector_course_context(),
+          'type' => 'course',
+        );
+        $course = _cis_connection_query($query, 'node');
+        if (isset($course['list'][0])) {
+          $coursenid = $course['list'][0]['nid'];
           $query = array(
             'status' => 1,
-              'nid' => $service_field['id'],
+            'field_course' => $coursenid,
+            'deep-load-refs' => 'node',
+            'type' => 'service_instance',
           );
-          // query the service object
-          $service_object = _cis_connection_query($query, $service_field['resource']);
-          // hold onto the objects
-          $output[$key] = $service_object['list'][0];
+          $service_instances = _cis_connection_query($query, 'node');
+          if (isset($service_instances['list'][0])) {
+            // hold onto the objects returned here
+            foreach ($service_instances['list'] as $instance) {
+              $tmp = $instance['field_services'][0];
+              $output[$tmp['field_machine_name']['und'][0]['value']] = array(
+                'field_machine_name' => $tmp['field_machine_name']['und'][0]['value'],
+                'title' => $tmp['title'],
+                'field_location' => array('url' => $tmp['field_location']['und'][0]['url']),
+              );
+            }
+          }
+        }
+      }
+      else {
+        // query access string based on section context
+        $query = $base_query;
+        $cis_section_items = _cis_connection_query($query, 'field_collection_item');
+        if (isset($cis_section_items['list'][0])) {
+          // check for services defined
+          if (isset($section_object['field_services']) && is_array($section_object['field_services'])) {
+            // walk each service requesting details
+            foreach ($section_object['field_services'] as $key => $service_field) {
+              if (!isset($output[$key])) {
+                $query = array(
+                  'status' => 1,
+                  'nid' => $service_field['id'],
+                );
+                // query the service object
+                $service_object = _cis_connection_query($query, $service_field['resource']);
+                // hold onto the objects returned here
+                $output[$key] = $service_object['list'][0];
+              }
+            }
+          }
         }
       }
     break;
@@ -598,17 +678,6 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           }
         }
         else if ($request == 'resources') {
-          // display related services prior to other resources
-          /*$services = _cis_connector_transaction('other_services');
-          // make sure this is actually using other services
-          if (is_array($services)) {
-            // render each service return item
-            foreach ($services as $service) {
-              $list .= '<h2>' . $service['title'] . '</h2>' . "\n";
-              $list .= '<div>' . $service['body']['value'] . "\n";
-              $list .= l(t('Access the @title service', array('@title' => $service['title'])), $service['field_location']['url'] . base_path()) . '</div>' . "\n";
-            }
-          }*/
           // loop through resources associated to build their info
           foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
             $resource = _cis_connection_object($reid['id'], $reid['resource']);

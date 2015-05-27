@@ -116,17 +116,23 @@ function _cis_lmsless_theme_vars() {
     $vars['resources'] = $resources;
     // throw in username
     $vars['username'] = (isset($GLOBALS['user']->name) ? check_plain($GLOBALS['user']->name) : '');
-    if (_cis_connector_role_grouping('staff') || isset($_SESSION['masquerading'])) {
-      $vars['admin_status_bar'] = array(
-        'course-section' => array(t('Section'), $section . ' <a href="#" data-reveal-id="block-cis-service-connection-section-context-changer-nav-modal">' . t('switch') . '</a>'),
-        'current-user-id' => array(t('User'), $vars['username']),
+    // set a login link if we don't have a user name
+    if ($vars['username'] == '') {
+      $vars['userlink'] = l(t('login'), 'user', array('attributes' => array('class' => array('account-logout', 'text-center', 'row'))));
+    }
+    else {
+      $vars['userlink'] = l(t('log out'), 'user/logout', array('attributes' => array('class' => array('account-logout', 'text-center', 'row'))));
+    }
+    if (_cis_connector_role_groupings(array('staff','teacher')) || isset($_SESSION['masquerading'])) {
+        $vars['admin_status_bar'] = array(
+        'course-section' => '<a href="#" data-reveal-id="block-cis-service-connection-section-context-changer-nav-modal" class="admin-alert middle-align-wrap"><span>' . $section . '</span></a>',
       );
       if (isset($_SESSION['masquerading'])) {
         $tmp = user_load($_SESSION['masquerading']);
-        $vars['admin_status_bar']['current-user-id'][1] .= ' ' . l(t('Switch back to (@name)', array('@name' => $tmp->name)), 'masquerade/unswitch', array('query' => array('token' => drupal_get_token('masquerade/unswitch'))));
+        $vars['admin_status_bar']['current-user-id'] = ' ' . l(t('Switch back to (@name)', array('@name' => $tmp->name)), 'masquerade/unswitch', array('query' => array('token' => drupal_get_token('masquerade/unswitch')), 'attributes' => array('class' => array('admin-alert', 'middle-align-wrap'))));
       }
       else {
-        $vars['admin_status_bar']['current-user-id'][1] .= ' <a href="#" data-reveal-id="block-masquerade-masquerade-nav-modal">' . t('impersonate') . '</a>';
+        $vars['admin_status_bar']['current-user-id'] = ' <a href="#" data-reveal-id="block-masquerade-masquerade-nav-modal" class="admin-alert middle-align-wrap"><span>' . filter_xss($GLOBALS['user']->name) . '</span></a>';
       }
       // calculate roles
       $tmproles = $GLOBALS['user']->roles;
@@ -134,26 +140,31 @@ function _cis_lmsless_theme_vars() {
       unset($tmproles[2]);
       // figure out how to present roles, don't assume there are roles
       if (!empty($tmproles)) {
-        if (count($tmproles) < 2) {
-          $roleword = t('Role');
-        }
-        else {
-          $roleword = t('Roles');
-        }
         sort($tmproles);
-        $vars['admin_status_bar']['user-role'] = array($roleword, implode(' and ', $tmproles));
+        $vars['admin_status_bar']['user-role'] = '<span class="admin-alert middle-align-wrap">' . implode(' and ', $tmproles) . '</span>';
       }
     }
     $distro = variable_get('install_profile', 'standard');
     $reg = _cis_connector_build_registry($distro);
     $tmp = explode('.', $reg['address']);
     $machine_name = $tmp[0];
+    // account for the current service being worked on but not actually
+    // being actively used in the section in question
+    $list['Services'] = array();
+    if (!isset($list['Services'][$machine_name])) {
+      $list['Services'][$machine_name] = array(
+        'title' => (isset($reg['default_title']) ? $reg['default_title'] : ''),
+        'url' => $GLOBALS['base_url'] . '/' . _cis_connector_course_context(),
+        'machine_name' => $machine_name,
+      );
+    }
+    $vars['active'] = $list['Services'][$machine_name];
     // request a list of all other services that this section uses
     if ($services = _cis_connector_transaction('other_services')) {
       foreach ($services as $service) {
         $list['Services'][$service['field_machine_name']] = array(
           'title' => $service['title'],
-          'url' => $service['field_location']['url'] . base_path(),
+          'url' => $service['field_location']['url'] . '/' . _cis_connector_course_context(),
           'machine_name' => $service['field_machine_name'],
         );
       }
@@ -162,41 +173,38 @@ function _cis_lmsless_theme_vars() {
       $services = $list = array();
       $list['Services'][$machine_name] = array(
         'title' => (isset($reg['default_title']) ? $reg['default_title'] : ''),
-        'url' => $GLOBALS['base_url'] . '/',
+        'url' => $GLOBALS['base_url'] . '/' . _cis_connector_course_context(),
         'machine_name' => $machine_name,
       );
     }
-    // account for the current service being worked on but not actually
-    // being actively used in the section in question
-    if (!isset($list['Services'][$machine_name])) {
-      $list['Services'][$machine_name] = array(
-        'title' => (isset($reg['default_title']) ? $reg['default_title'] : ''),
-        'url' => $GLOBALS['base_url'] . '/',
-        'machine_name' => $machine_name,
-      );
+    // allow theme to override this if set
+    $theme_override = theme_get_setting('foundation_access_system_label');
+    if (!empty($theme_override)) {
+      $vars['active']['title'] = $theme_override;
     }
-    $vars['active'] = $list['Services'][$machine_name];
     // add in link to the CIS location if permission exists
     // @ignore druplart_conditional_assignment
     if (user_access('view lmsless cis link') && $settings = _cis_connector_build_registry()) {
-      $list['Administrative']['online'] = array(
-        'title' => $settings['cis']['default_title'],
-        'url' => _cis_connector_format_address($settings['cis'], base_path(), 'front'),
-        'machine_name' => 'online',
-      );
-      $vars['service_option_link'] = _cis_connector_format_address($settings['cis'], base_path(), 'front') . 'service-instances';
+      if ($vars['active']['machine_name'] != 'online') {
+        $list['Administrative']['online'] = array(
+          'title' => $settings['cis']['default_title'],
+          'url' => _cis_connector_format_address($settings['cis'],  '/' . _cis_connector_course_context(), 'front'),
+          'machine_name' => 'online',
+        );
+      }
+      $vars['service_option_link'] = _cis_connector_format_address($settings['cis'],  '/' . _cis_connector_course_context(), 'front') . 'service-instances';
       // @todo better way of hooking this in / other authority systems in the future
-      if (isset($settings['elmsmedia'])) {
+      if (isset($settings['elmsmedia']) && $vars['active']['machine_name'] != 'media') {
         $list['Administrative']['media'] = array(
           'title' => $settings['elmsmedia']['default_title'],
-          'url' => _cis_connector_format_address($settings['elmsmedia'], '', 'front'),
+          'url' => _cis_connector_format_address($settings['elmsmedia'], '/' . _cis_connector_course_context(), 'front'),
           'machine_name' => 'media',
         );
       }
-      if (isset($settings['ecd'])) {
+      if (isset($settings['ecd']) && $vars['active']['machine_name'] != 'ecd') {
         $list['Administrative']['comply'] = array(
           'title' => $settings['ecd']['default_title'],
-          'url' => _cis_connector_format_address($settings['ecd'], '', 'front'),
+          'url' => _cis_connector_format_address($settings['ecd'], '/' . _cis_connector_course_context(), 'front'),
           'machine_name' => 'comply',
         );
       }
@@ -228,7 +236,8 @@ function cis_lmsless_theme() {
         'main_menu' => menu_tree(variable_get('menu_main_links_source', 'main-menu')),
         'help_link' => url('course-help'),
         'search' => '',
-        'user_name' => t('Account'),
+        'username' => t('Account'),
+        'userlink' => '',
         'resources' => array(),
         'tech_support' => array(),
         'admin_status_bar' => array(),
