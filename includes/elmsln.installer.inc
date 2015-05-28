@@ -7,7 +7,12 @@
 /**
  * Initial standard preflight routine.
  */
-function _elmsln_installer_preflight() {
+function _elmsln_installer_preflight($makesection = FALSE) {
+  // create a default section if this is a service
+  if ($makesection) {
+    // add in a master section
+    _elmsln_installer_make_default_section();
+  }
   // This isn't actually necessary as there are no node_access() entries,
   // but we run it to prevent the "rebuild node access" message from being
   // shown on install.
@@ -128,6 +133,34 @@ function _elmsln_installer_post_install_cleanup() {
   }
   // revert all features
   features_revert();
+  // rebuild the menu
+  menu_rebuild();
   // ignore any other install messages
   drupal_get_messages();
+}
+
+/**
+ * Callback to generate a section node; used during profile install.
+ */
+function _elmsln_installer_make_default_section() {
+  if (module_exists('cis_section')) {
+    $node = new stdClass();
+    $node->type = 'section';
+    node_object_prepare($node);
+    $node->language = LANGUAGE_NONE;
+    $node->uid = 1;
+    $node->status = 1;
+    $node->promote = 0;
+    $node->revision = 1;
+    $node->title = t('Master Section');
+    // make up a random section id to make things happy but fake
+    $node->field_section_id[LANGUAGE_NONE][0]['value'] = 'master_' . rand(1000, 5000);
+    // mark this as inactive so it can sync with systems
+    $node->field_cis_active[LANGUAGE_NONE][0]['value'] = 0;
+    // build out via submit then save
+    if($node = node_submit($node)) {
+      node_save($node);
+    }
+    return $node;
+  }
 }
