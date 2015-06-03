@@ -34,16 +34,6 @@ function cis_lmsless_page_build(&$page) {
 }
 
 /**
- * Implements preprocess_cis_lmsless_contextual_links()
- */
-function cis_lmsless_preprocess_cis_lmsless_contextual_links(&$variables) {
-  $variables['classes_array'][] = $variables['element']['class'];
-  $variables['title'] = $variables['element']['title'];
-  $variables['content'] = $variables['element']['#children'];
-  $variables['more'] = $variables['element']['more'];
-}
-
-/**
  * Callback to assemble the bar
  */
 function _cis_lmsless_assemble() {
@@ -127,14 +117,26 @@ function _cis_lmsless_theme_vars() {
       $vars['admin_status_bar'] = array();
       // account for systems without sections (like authorities)
       if ($section) {
-        $vars['admin_status_bar']['course-section'] = '<a href="#" data-reveal-id="block-cis-service-connection-section-context-changer-nav-modal" class="admin-alert middle-align-wrap"><span>' . $section . '</span></a>';
+        $vars['admin_status_bar']['course-section'] = array(
+          'modal' => 'block-cis-service-connection-section-context-changer-nav-modal',
+          'title' => t('change'),
+          'content' => $section,
+        );
       }
+      // render differently if the user is already masquerading
       if (isset($_SESSION['masquerading'])) {
         $tmp = user_load($_SESSION['masquerading']);
-        $vars['admin_status_bar']['current-user-id'] = ' ' . l(t('Switch back to (@name)', array('@name' => $tmp->name)), 'masquerade/unswitch', array('query' => array('token' => drupal_get_token('masquerade/unswitch')), 'attributes' => array('class' => array('admin-alert', 'middle-align-wrap'))));
+        $vars['admin_status_bar']['current-user-id'] = array(
+          'title' => l(t('revert'), 'masquerade/unswitch', array('query' => array('token' => drupal_get_token('masquerade/unswitch')))),
+          'content' => filter_xss($tmp->name),
+        );
       }
       else {
-        $vars['admin_status_bar']['current-user-id'] = ' <a href="#" data-reveal-id="block-masquerade-masquerade-nav-modal" class="admin-alert middle-align-wrap"><span>' . filter_xss($GLOBALS['user']->name) . '</span></a>';
+        $vars['admin_status_bar']['current-user-id'] = array(
+          'modal' => 'block-masquerade-masquerade-nav-modal',
+          'title' => t('impersonate'),
+          'content' => filter_xss($GLOBALS['user']->name),
+        );
       }
       // calculate roles
       $tmproles = $GLOBALS['user']->roles;
@@ -143,7 +145,9 @@ function _cis_lmsless_theme_vars() {
       // figure out how to present roles, don't assume there are roles
       if (!empty($tmproles)) {
         sort($tmproles);
-        $vars['admin_status_bar']['user-role'] = '<span class="admin-alert middle-align-wrap">' . implode(' and ', $tmproles) . '</span>';
+        $vars['admin_status_bar']['user-role'] = array(
+          'content' => filter_xss(implode(', ', $tmproles)),
+        );
       }
     }
     $distro = variable_get('install_profile', 'standard');
@@ -198,7 +202,7 @@ function _cis_lmsless_theme_vars() {
           );
         }
       }
-      // contextual link for the service creation stuff inline
+      // service creation stuff inline
       $vars['service_option_link'] = _cis_connector_format_address($reg['cis'],  '/' . _cis_connector_course_context(), 'front') . 'service-instances';
     }
     $vars['services'] = $list;
@@ -246,18 +250,6 @@ function cis_lmsless_theme() {
       ),
       'render element' => 'element',
       'template' => 'templates/cis-lmsless-bar',
-    ),
-    'cis_lmsless_contextual_links' => array(
-      'render element' => 'element',
-      'template' => 'templates/cis-lmsless-contextual-links',
-    ),
-    'cis_lmsless_contextual_container' => array(
-      'render element' => 'element',
-      'template' => 'templates/cis-lmsless-contextual-container',
-      'variables' => array(
-        'short' => 'short',
-        'cis_links' => array(),
-      ),
     ),
   );
 }
