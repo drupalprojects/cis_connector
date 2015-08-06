@@ -180,6 +180,12 @@ function cis_tokens_token_info() {
         'description' => t("Section ID of the section currently in context"),
       ),
     ),
+    'elmsln_section_data' => array(
+      'section_context' => array(
+        'name' => t("Section Context"),
+        'description' => t("Section ID of the section currently in context"),
+      ),
+    ),
   );
   // dynamically generate the global tokens based on those defined globally
   // as well as per the section. Section always takes priority in this value
@@ -206,6 +212,17 @@ function cis_tokens_token_info() {
  */
 function cis_tokens_node_prepare($node) {
   if ($node->type == 'section' && !isset($node->field_cis_tokens[LANGUAGE_NONE])) {
+    $node->field_cis_tokens['und'][0]['value'] = variable_get('cis_tokens_global', _cis_tokens_sane_defaults());
+  }
+}
+
+/**
+ * Implements hook_node_presave().
+ */
+function cis_tokens_node_presave($node) {
+  // make sure we have a section that DOES NOT have tokens currently stuffed in it
+  // if there are none then replicate them locally from the global
+  if ($node->type == 'section' && (!isset($node->field_cis_tokens[LANGUAGE_NONE]) || empty($node->field_cis_tokens[LANGUAGE_NONE]))) {
     $node->field_cis_tokens['und'][0]['value'] = variable_get('cis_tokens_global', _cis_tokens_sane_defaults());
   }
 }
@@ -268,7 +285,15 @@ function _cis_tokens_get_token_scope($scope = FALSE) {
  */
 function cis_tokens_form_cis_service_connection_ux_form_alter(&$form, &$form_state, $form_id) {
   /* Your code here */
-  $form['site_information']['cis_tokens_global'] = array(
+  $form['tokens'] = array(
+    '#tree' => '0',
+    '#type' => 'fieldset',
+    '#collapsed' => '1',
+    '#collapsible' => '1',
+    '#title' => t('Course tokens'),
+    '#weight' => '1',
+  );
+  $form['tokens']['cis_tokens_global'] = array(
     '#title' => t('Tokens'),
     '#type' => 'textarea',
     '#description' => t('This is a list of token replacement|value pairs that can be used throughout the course. This is useful when wanting to centralize where you update noodle-y information throughout course content which might otherwise be standalone. For example, writing start_date|June 15, 2015 would allow you to write [elmsln_section:start_date] in your content and have it automatically replaced with June 15, 2015.'),
