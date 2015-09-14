@@ -229,10 +229,6 @@ function _cis_lmsless_theme_vars() {
       );
     }
     $vars['services'] = $list;
-    // support for search bar if active
-    if (module_exists('search') && user_access('search content')) {
-      $vars['search'] = drupal_get_form('search_block_form');
-    }
     $vars['bar_elements'] = array(
       'network' => TRUE,
       'user' => TRUE,
@@ -245,16 +241,16 @@ function _cis_lmsless_theme_vars() {
     }
     // support people wiping help link via settings
     $help_link = variable_get('cis_help_page', 'course-help');
-    $vars['help_link'] = $help_link;
     if (empty($help_link)) {
       $vars['bar_elements']['help'] = FALSE;
     }
+    $vars['help_link'] = url($help_link);
     // support people wiping syllabus link via settings
     $syllabus_link = variable_get('cis_syllabus_page', 'syllabus');
-    $vars['syllabus_link'] = $syllabus_link;
     if (empty($syllabus_link)) {
       $vars['bar_elements']['syllabus'] = FALSE;
     }
+    $vars['syllabus_link'] = url($syllabus_link);
 
     // allow other projects to alter these values
     drupal_alter('cis_lmsless_theme_vars', $vars);
@@ -278,7 +274,6 @@ function cis_lmsless_theme() {
         'main_menu' => menu_tree(variable_get('menu_main_links_source', 'main-menu')),
         'help_link' => url('course-help'),
         'syllabus_link' => url('syllabus'),
-        'search' => '',
         'username' => t('Account'),
         'userlink' => '',
         'resources' => array(),
