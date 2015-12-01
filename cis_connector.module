@@ -22,7 +22,7 @@ function cis_connector_restws_meta_controls_alter(&$controls) {
   $controls['xml-out'] = 'xml-out';
   $controls['role-filter'] = 'role-filter';
   $controls['count'] = 'count';
-  $controls['display-mode'] = 'display-mode';
+  $controls['display_mode'] = 'display_mode';
 }
 
 /**
@@ -662,13 +662,15 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           if (isset($service_instances['list'][0])) {
             // hold onto the objects returned here
             foreach ($service_instances['list'] as $instance) {
-              $tmp = $instance['field_services'][0];
-              if (isset($tmp['field_machine_name'])) {
-                $output[$tmp['field_machine_name']['und'][0]['value']] = array(
-                  'field_machine_name' => $tmp['field_machine_name']['und'][0]['value'],
-                  'title' => $tmp['title'],
-                  'field_location' => array('url' => $tmp['field_location']['und'][0]['url']),
-                );
+              if (isset($instance['field_services'])) {
+                $tmp = $instance['field_services'][0];
+                if (isset($tmp['field_machine_name'])) {
+                  $output[$tmp['field_machine_name']['und'][0]['value']] = array(
+                    'field_machine_name' => $tmp['field_machine_name']['und'][0]['value'],
+                    'title' => $tmp['title'],
+                    'field_location' => array('url' => $tmp['field_location']['und'][0]['url']),
+                  );
+                }
               }
             }
           }
@@ -721,11 +723,13 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           }
         }
         else if ($request == 'resources') {
-          // loop through resources associated to build their info
-          foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
-            $resource = _cis_connection_object($reid['id'], $reid['resource']);
-            $list .= '<h2>' . $resource['title'] . '</h2>';
-            $list .= $resource['body']['value'];
+          if (isset($cis_section_item['list'][0])) {
+            // loop through resources associated to build their info
+            foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
+              $resource = _cis_connection_object($reid['id'], $reid['resource']);
+              $list .= '<h2>' . $resource['title'] . '</h2>';
+              $list .= $resource['body']['value'];
+            }
           }
         }
         // request the standard resource language
@@ -1623,8 +1627,6 @@ function _cis_connector_drush_task_runner($commands) {
     }
     $target = implode(',', $command['target']);
     $clean_target = str_replace(',', '.', str_replace('@', '', $target));
-    // generate name as path - target - time - uuid
-    $task_runner = CIS_CONNECTOR_DRUSH_TASK_RUNNER_PATH . $clean_target . '-' . REQUEST_TIME . '-' . $uuid;
     // args are required
     if (!isset($command['args']) || !is_array($command['args'])) {
       return FALSE;
@@ -1635,7 +1637,7 @@ function _cis_connector_drush_task_runner($commands) {
     }
     $args = implode(' ', $command['args']);
 
-    $options = '--y';
+    $options = '';
     // options is not required
     if (isset($command['options']) && is_array($command['options'])) {
       $options .= ' --' . implode(' --', $command['options']);
@@ -1643,6 +1645,8 @@ function _cis_connector_drush_task_runner($commands) {
     // convert command into a string
     $content .= "drush $target $args $options" . "\n";
   }
+  // generate name as path - target - time - uuid
+  $task_runner = CIS_CONNECTOR_DRUSH_TASK_RUNNER_PATH . REQUEST_TIME . '.' . $clean_target . '.' . $uuid;
   // don't write if we got nothing to put into the file
   if (empty($content)) {
     return FALSE;
@@ -1667,4 +1671,26 @@ function _cis_connector_banned_drush_commands() {
   // these all have security or performance issues that could destroy the box
   // and as a result should not be allowed to run via this task no matter what
   return array('si', 'site-install', 'eval', 'ev', 'scr', 'php-script', 'runserver', 'rs', 'ssh', 'site-ssh', 'test-run');
+}
+
+/**
+ * Figure out the parent domain of this tool
+ * useful for making safe iframe parent domain exceptions
+ * @return string domain parent of the current system's domain
+ */
+function _cis_connector_parent_domain($bucket = NULL) {
+  // if null, rely on the install profile
+  if (empty($bucket)) {
+    $bucket = variable_get('install_profile', 'standard');
+  }
+  // ensure we have something to bother trying to obtain domain off of
+  if ($settings = _cis_connector_build_registry($bucket)) {
+    $tmp = explode('.', $settings['address']);
+    // remove the first sub-domain
+    array_shift($tmp);
+    // rebuild as higher level domain
+    $domain = implode('.', $tmp);
+    return $domain;
+  }
+  return FALSE;
 }
