@@ -245,7 +245,7 @@ function cis_filter_preprocess_cis_filter_render__link(&$vars) {
   // fallback in case there was nothing to query
   $link .= $code['entity_type'] . '/' . $code['item'];
   $instance = str_replace('/', '', $instance);
-  $response = _cis_connector_request($instance . '/' . $url, array(), $code['tool']);
+  $response = _cis_connector_request($instance . '/' . $url, array('method' => 'GET'), $code['tool']);
   $data = drupal_json_decode($response->data);
   // if we have the field property set return a link
   if (isset($code['field']) && isset($data[$code['field']]['url'])) {
@@ -355,7 +355,7 @@ function cis_filter_preprocess_cis_filter_render__submit(&$vars) {
     // this is one of the more ridiculous capabilities of this system
     $target_found = FALSE;
     $section = _cis_connector_section_context();
-    // check for master_ since we need to hit the title of the mastet then
+    // check for master since we need to hit the title of the master then
     // since they are variable based on the design of the system
     $query = array(
       'deep-load-refs' => $code['entity_type'],

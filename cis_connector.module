@@ -13,6 +13,7 @@ define ('CIS_CONNECTOR_ENTITY_BOTH', 0);
 define ('CIS_CONNECTOR_ENTITY_REMOTE_ONLY', 1);
 // @todo read off config directory
 define ('CIS_CONNECTOR_DRUSH_TASK_RUNNER_PATH', '/var/www/elmsln/config/jobs/drush-command-job/');
+define ('CIS_NO_SECTION', 'NO_SECTION');
 
 /**
  * Implements hook_restws_meta_controls_alter().
@@ -197,7 +198,7 @@ function _cis_connection_set_data($query, $data, $id_field = 'nid', $entity_type
     // update all items that were found
     foreach ($result['list'] as $response_item) {
       // post back to place queried from
-      $saved[] = _cis_connection_object($response_item[$id_field], $entity_type, NULL, 'PUT', $data, $bucket, $instance, $extra, $call_options);
+      $saved[] = _cis_connection_object($response_item[$id_field], $entity_type, NULL, 'PUT', $data, $bucket, $instance, FALSE, $extra, $call_options);
     }
   }
   return $saved;
@@ -401,16 +402,17 @@ function _cis_connector_system_type($bucket = NULL) {
  */
 function _cis_connector_course_context() {
   // pull current menu object into a node if possible
-  if ($node = menu_get_object('node')) {
-    // we are in an authority system
+  if ($node = menu_get_object('node', 1, arg(0) . '/' . arg(1))) {
+    // we are in CIS
     if ($node->type == 'course' && isset($node->field_machine_name['und'][0]['value'])) {
       return $node->field_machine_name['und'][0]['value'];
     }
+    // we are in an authority system
     elseif ($node->type == 'cis_course' && isset($node->field_course_machine_name['und'][0]['value'])) {
       return $node->field_course_machine_name['und'][0]['value'];
     }
   }
-  // fallback and usual use-case is base_path
+  // fallback and usual use-case is base_path from services
   return str_replace('/', '', base_path());
 }
 
@@ -455,6 +457,7 @@ function _cis_connector_section_context($account = NULL) {
     }
     // check for global session override
     if (isset($_SESSION['cis_section_context'])) {
+      $section = $_SESSION['cis_section_context'];
       return $_SESSION['cis_section_context'];
     }
     // use current user if acount is not set
@@ -470,101 +473,29 @@ function _cis_connector_section_context($account = NULL) {
     if (isset($group['gid'])) {
       $group = node_load($group['gid']);
     }
+    // ensure section is set to master for staff at this point
+    elseif (_cis_connector_role_grouping('staff', $account)) {
+      // we have no context and we are staff, default master
+      $section = 'master';
+    }
     else {
       // load groups they are part of, most likely location for this
       $groups = og_get_entity_groups('user', $account);
       if (!empty($groups['node'])) {
         $group = node_load(array_pop($groups['node']));
       }
-    }
-    // ensure section is set
-    if (isset($group->field_section_id) && is_array($group->field_section_id[LANGUAGE_NONE])) {
-      // pull out the section value if available
-      $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
-    }
-    else {
-      // see if we are an administrative account that might be missing
-      // access to a group but yet clearly could be in the master
-      if (_cis_connector_role_groupings(array('staff','teacher'), $account)) {
-        // ensure we have section active first
-        $info = entity_get_info('node');
-        if (isset($info['bundles']['section'])) {
-          $query = new EntityFieldQuery();
-          // pull all nodes
-          $query->entityCondition('entity_type', 'node')
-          // that are sections
-          ->entityCondition('bundle', 'section')
-          // that are published
-          ->propertyCondition('status', 1)
-          // that have a section like master_
-          ->fieldCondition('field_section_id', 'value', 'master_%', 'like')
-          ->addMetaData('account', user_load(1));
-          // store results
-          $result = $query->execute();
-          // ensure we have results
-          if (isset($result['node'])) {
-            $nids = array_keys($result['node']);
-            $sections = entity_load('node', $nids);
-            $group = array_pop($sections);
-            $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
-            // add person to this group automatically
-            $values = array(
-              'entity_type' => 'user',
-              'entity' => $account,
-            );
-            og_group('node',$group->nid, $values);
-          }
-        }
-        else {
-          // variable as to what should be considered default
-          // this allows authenticated / anonymous levels of access to still
-          // make sense of the system in a fallback scenario when they actually
-          // should have access to something
-          $section = variable_get('cis_section_default', 'default');
-        }
+      // make sure a section isset
+      if (isset($group->field_section_id) && is_array($group->field_section_id[LANGUAGE_NONE])) {
+        // pull out the section value if available
+        $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
       }
       else {
-        // last ditch effort, check for ability to see section switcher
-        // this implies a role that should be able to see the way sections
-        // are setup and so we need to just pick the best available option
-        if (user_access('switch section context')) {
-          $query = new EntityFieldQuery();
-          // pull all nodes
-          $query->entityCondition('entity_type', 'node')
-          // that are sections
-          ->entityCondition('bundle', 'section')
-          // that are published
-          ->propertyCondition('status', 1)
-          // that are active
-          ->fieldCondition('field_cis_active', 'value', '1', '=')
-          // ordered by date created
-          ->propertyOrderBy('created', 'DESC')
-          // load all possible results in system
-          ->addMetaData('account', user_load(1))
-          // only get the top one though
-          ->range(0, 1);
-          // store results
-          $result = $query->execute();
-          // ensure we have results
-          if (isset($result['node'])) {
-            $nids = array_keys($result['node']);
-            $sections = entity_load('node', $nids);
-            $group = array_pop($sections);
-            $section = $group->field_section_id[LANGUAGE_NONE][0]['safe_value'];
-            // also hijack the global session so that the form is auto populated
-            // with a reasonable value instead of magically giving a section
-            // association.  This means they won't be able to "unset" their
-            // made up section affiliation but that's ok.
-            $_SESSION['cis_section_context'] = $section;
-          }
-        }
-        else {
-          // variable as to what should be considered default
-          // this allows authenticated / anonymous levels of access to still
-          // make sense of the system in a fallback scenario when they actually
-          // should have access to something
-          $section = variable_get('cis_section_default', 'default');
-        }
+        // variable as to what should be considered default
+        // this allows authenticated / anonymous levels of access
+        // this doesn't default to master because we don't want
+        // to deliver them anything unless specifically set
+        // in the settings area
+        $section = variable_get('cis_section_default', CIS_NO_SECTION);
       }
     }
   }
@@ -612,7 +543,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
     $section = _cis_connector_section_context();
   }
   // account for FAKE master sections that have been auto generated
-  if (strpos($section, 'master_') === 0 && $request != 'other_services') {
+  if ($section == 'master' && $request != 'other_services') {
     // return an empty array. this is what happened when there is a query for
     // a section that doesn't exist. this avoids it throwing an error
     return array();
@@ -627,7 +558,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // request the section of the user
       $cis_section_item = _cis_connection_query($query, 'field_collection_item');
       // return the whole section array
-      $output = $cis_section_item['list'][0];
+      $output = (isset($cis_section_item['list'][0]) ? $cis_section_item['list'][0] : FALSE);
     break;
     case 'contact_info':
       // query access string based on section context
@@ -643,7 +574,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // check for section context existing; if it doesn't then
       // we know we are in an authority system and need to make a more complex
       // request for the systems in use by ANY section of this course
-      if (strpos($section, 'master_') === 0 || in_array($section, array('default', NULL, FALSE)) !== FALSE) {
+      if ($section == 'master' || in_array($section, array('default', NULL, FALSE)) !== FALSE) {
         $query = array(
           'status' => 1,
           'field_machine_name' => _cis_connector_course_context(),
@@ -712,7 +643,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // make sure it got data
       if (!empty($cis_section_item)) {
         $list = '';
-        if ($request == 'help') {
+        if ($request == 'help' && isset($cis_section_item['list'][0])) {
           foreach ($cis_section_item['list'][0]['field_resources'] as $reid) {
             $resource = _cis_connection_object($reid['id'], $reid['resource']);
             // if we have something called tech_support, inject it onto the help page
@@ -722,7 +653,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
             }
           }
         }
-        else if ($request == 'resources') {
+        elseif ($request == 'resources') {
           if (isset($cis_section_item['list'][0])) {
             // loop through resources associated to build their info
             foreach ($cis_section_item['list'][0]['field_' . $request] as $reid) {
@@ -743,9 +674,11 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
         }
         else {
           // do it the normal way that everyone wants usually except Bill
-          $resource_page['list'][0]['body']['value'] .= $list;
-          // send the text with format for processing
-          $output = $resource_page['list'][0]['body'];
+          if (isset($resource_page['list'])) {
+            $resource_page['list'][0]['body']['value'] .= $list;
+            // send the text with format for processing
+            $output = $resource_page['list'][0]['body'];
+          }
         }
       }
     break;
@@ -754,7 +687,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // request the section of the user, always uncached
       $cis_section_item = _cis_connection_query($query, 'field_collection_item', 'json', 'GET', 'cis', '', FALSE);
       // pull back access duration
-      if ($cis_section_item) {
+      if ($cis_section_item && isset($cis_section_item['list'][0])) {
         $dates = $cis_section_item['list'][0]['field_access_dates'];
         // pull back the date class officially begins
         $class_begin = $cis_section_item['list'][0]['field_course_start'];
@@ -1290,7 +1223,8 @@ function cis_connector_libraries_info_file_paths() {
  * Implements hook_init().
  */
 function cis_connector_init() {
- if (isset($_GET['cis-refresh']) && $_GET['cis-refresh']) {
+  // @todo maybe do an in-bound alter for this
+  if (isset($_GET['cis-refresh']) && $_GET['cis-refresh']) {
     drupal_set_message(t('CIS is currently refreshing its cache, reload this page in a moment to reflect any changes.'), 'status', FALSE);
   }
 }
@@ -1694,3 +1628,61 @@ function _cis_connector_parent_domain($bucket = NULL) {
   }
   return FALSE;
 }
+
+/**
+ * Helper function to break an elmsln url into
+ * identifiable parts. 
+ * 
+ * @param  string $url
+ * @return array()
+ *         - protocol
+ *         - path
+ *         - subdomain
+ *         - domain
+ */
+function _cis_connector_url_get_properties($url) {
+  $function_id = drupal_hash_base64(__FUNCTION__ . $url);
+  $properties = &drupal_static($function_id);
+  
+  if (!isset($properties)) {
+    // split the url at the protocol
+    $url_array = preg_split('/(:\/\/)/', $url);
+    $properties['protocol'] = $url_array[0];
+    // delete the protocol
+    array_shift($url_array);
+    // split the domain at the first backslash
+    $url_array = preg_split('/\//', $url_array[0], 2);
+    if (isset($url_array[1])) {
+      $properties['path'] = $url_array[1];
+    }
+    // split the url into subdomain and domain
+    $url_array = preg_split('/\./', $url_array[0], 2);
+    $properties['subdomain'] = $url_array[0];
+    $properties['domain'] = $url_array[1];
+  }
+
+  return $properties;
+}
+
+/**
+ * Get user ids by passing in an array of roles.
+ */
+function _cis_connector_load_users_by_role($roles = array()) {
+  // return membership to this group that are students
+  $query = db_select('users_roles', 'ur');
+  // join roles
+  $query->leftJoin('role', 'r', 'r.rid = ur.rid');
+  // join users
+  $query->leftJoin('users', 'u', 'u.uid = ur.uid');
+  // only grab people with these roles
+  $query->condition('r.name', $roles, 'IN');
+  // who are active
+  $query->condition('u.status', '1', '=');
+  // return the entity id which is the user's id
+  $query->fields('u', array('uid'));
+  // execute
+  $result = $query->execute();
+  // weird call but returns an array of the uids selected
+  return array_keys($result->fetchAllAssoc('uid'));
+}
+

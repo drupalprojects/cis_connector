@@ -6,7 +6,7 @@
 
 define('CIS_SECTION_STUDENT', 'student');
 define('CIS_SECTION_PAST_STUDENT', 'past student');
-define('CIS_SECTION_MASTER_PREFIX', 'master_');
+define('CIS_SECTION_MASTER', 'master');
 
 include_once 'cis_section.features.inc';
 
@@ -334,9 +334,27 @@ function cis_section_assemble_roster($sections, $activated = FALSE) {
  * Implements hook_node_insert().
  */
 function cis_section_node_insert($node) {
-  // account for newly created sections being activated so we can react immediately
-  if ($node->type == 'section' && $node->field_cis_active['und'][0]['value'] == 1) {
-    cis_section_state_change($node, 'activate');
+  if ($node->type == 'section') {
+    // ensure all staff / admin users are added to
+    // the group automatically for staff level roles
+    $roles = _cis_connector_role_groups('staff');
+    // load all uids
+    $uids = _cis_connector_load_users_by_role($roles);
+    // load all user entities in the list
+    $users = entity_load('user', $uids);
+    foreach ($users as $member) {
+      $values = array(
+        'entity_type' => 'user',
+        'entity' => $member,
+      );
+      // add user to the group
+      og_group('node',$node->nid, $values);
+    }
+    // account for newly created sections being activated
+    // so we can react immediately
+    if ($node->field_cis_active['und'][0]['value'] == 1) {
+      cis_section_state_change($node, 'activate');
+    }
   }
 }
 
@@ -581,7 +599,7 @@ function _cis_section_load_users_by_gid($gid, $rid = NULL) {
  * Implements hook_form_FORM_ID_alter().
  */
 function cis_section_form_cis_service_connection_ux_form_alter(&$form, &$form_state, $form_id) {
-  $options = array('default' => 'No default') + _cis_connector_assemble_entity_list('node', 'section', 'field_section_id', 'title');
+  $options = array(CIS_NO_SECTION => 'No default') + _cis_connector_assemble_entity_list('node', 'section', 'field_section_id', 'title');
   $form['section'] = array(
     '#tree' => '0',
     '#type' => 'fieldset',
@@ -591,7 +609,7 @@ function cis_section_form_cis_service_connection_ux_form_alter(&$form, &$form_st
     '#weight' => '-1',
   );
   $form['section']['cis_section_default'] = array(
-    '#default_value' => variable_get('cis_section_default', 'default'),
+    '#default_value' => variable_get('cis_section_default', CIS_NO_SECTION),
     '#weight' => '3',
     '#description' => t('This is used in cases where a user is not in a group but should still have access to the system such as a course that allows annonymous access or access to anyone to passes the authentication system but isn\'t nessecarily in a section.'),
     '#type' => 'select',
@@ -612,8 +630,59 @@ function _cis_section_is_master($section_id = NULL) {
     $section_id = _cis_connector_section_context();
   }
   // check for a master section as they all prefix the same way
-  if (strpos($section_id, CIS_SECTION_MASTER_PREFIX) === 0) {
+  if ($section_id == CIS_SECTION_MASTER) {
     return TRUE;
   }
   return FALSE;
+}
+
+/**
+ * Implements hook_url_inbound_alter().
+ *
+ * Sets the active section for a user based on a query parameter.
+ */
+function cis_section_url_inbound_alter(&$path, $original_path, $path_language) {
+  $query = drupal_get_query_parameters();
+  if (isset($query['elmsln_active_course']) && $section_id = $query['elmsln_active_course']) {
+    // get a list of allowed sections for this user
+    $sections = cis_section_all_sections();
+    // check if the proposed section is in the list of allowed sections
+    if (in_array($section_id, $sections) || _cis_connector_role_grouping('staff')) {
+      // set the active session
+      $_SESSION['cis_section_context'] = $section_id;
+    }
+    else {
+      drupal_set_message(t('You currently do not have access to section @section_id', array('@section_id' => $section_id)), 'warning');
+    }
+    // Remove the active course query parameter and proceed to the url
+    unset($query['elmsln_active_course']);
+    drupal_goto($path, array('query' => $query));
+  }
+}
+
+/**
+ * Implements hook_url_outbound_alter().
+ *
+ * Appends section context query parameter to
+ * all outbound links going to other ELMSLN subdomains.
+ */
+function cis_section_url_outbound_alter(&$path, &$options, $original_path) {
+  // do an easy inital check to see if it's going to an external site
+  // internal links shouldn't have a protocol
+  if (strpos($path, '://')) {
+    global $base_url;
+    $current_domain = _cis_connector_url_get_properties($base_url);
+    // verify the current domain is in the outgoing domain
+    if (strpos($original_path, $current_domain['domain'])) {
+      $outgoing_domain = _cis_connector_url_get_properties($original_path);
+      // verify that the link is going to a separate subdomain
+      if ($current_domain['subdomain'] != $outgoing_domain['subdomain']) {
+        $current_section = _cis_connector_section_context();
+        if (isset($current_section) && $current_section) {
+          // append the section context query parameter to the outgoing url
+          $options['query']['elmsln_active_course'] = $current_section;
+        }
+      }
+    }
+  }
 }
