@@ -1,0 +1,1078 @@
+<?php
+/**
+ * @file
+ * ELMSLN API for high performance calls for smaller operations
+ *
+ * This is a fork of the js module for high performance, low bootstrap
+ * drupal requests.
+ *
+ * This lets you do advanced changes that really are just pinpricks
+ * in multiple systems across th'e network to keep them in sync.
+ * For example, if you need to let the user modify a form in one
+ * system but have it impact the databases of several in the course
+ * network, then ELMSLN API can do the hardwork, reducing your
+ * call structure to something lightweight.
+ *
+ * If you are looking to create a node in another system then you
+ * should use the RESTws backend baked into the _cis_connector_request
+ * call in cis_connector. That project is for fuller, object based
+ * request structure that have permission / full entity implications
+ * where this API is for kicking of non-entity based operations such
+ * as knowing that data updated in 1 system requires the caches to be
+ * cleared in another.
+ *
+ */
+
+/**
+ * Constants copied from menu.inc in order to drop dependency on that file.
+ */
+define('ELMSLN_MENU_NOT_FOUND', 2);
+define('ELMSLN_MENU_ACCESS_DENIED', 3);
+define('ELMSLN_MENU_SITE_OFFLINE', 4);
+define('ELMSLN_MENU_SITE_ONLINE', 5);
+
+/**
+ * Internal menu status code - Request method is not allowed.
+ */
+define('ELMSLN_MENU_METHOD_NOT_ALLOWED', 6);
+
+/**
+ * Implements hook_menu().
+ */
+function elmsln_api_menu() {
+  $items['elmsln_api'] = array(
+    'title' => 'ELMSLN API Bridge',
+    'page callback' => '_elmsln_api_bridge',
+    'page arguments' => array(1, 2, 3),
+    'access callback' => 'cis_connector_role_access',
+    'access arguments' => array(array('administrator', 'instructor', 'staff')),
+    'type' => MENU_CALLBACK,
+  );
+  // tee-up our application
+  $items['api/v1/elmsln/user'] = array(
+    'page callback' => '_elmsln_api_user_request',
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+/**
+ * Page callback: returns information to establish a headless application
+ * to connect to the site. This assumes a user session already exists.
+ */
+function _elmsln_api_user_request() {
+  drupal_add_http_header('Content-Type', 'application/json');
+  $vars = array(
+    'site' => array(
+      'base-url' => $GLOBALS['base_url'],
+    ),
+    'user' => array(
+      'uid' => $GLOBALS['user']->uid,
+      'csrf-token' => drupal_get_token('restws'),
+    ),
+  );
+  print drupal_json_output($vars);
+  drupal_exit();
+}
+
+/**
+ * Callback to include dependencies for the backend invocation.
+ */
+function _elmsln_api_ajax_api() {
+  // pass variables so we have the tokens needed
+  $js_variables = array(
+    'elmsln_api' => array(
+      'token' => drupal_get_token(),
+      'ajaxPath' => base_path() . 'elmsln_api',
+    ),
+  );
+  drupal_add_js($js_variables, "setting");
+  drupal_add_js(drupal_get_path('module', 'elmsln_api') . '/js/elmsln_api.js');
+}
+
+/**
+ * Callback for menu path elmsln_api.
+ * This is a wrapper around elmsln_api_request so
+ * that it can be securely used locally
+ */
+function _elmsln_api_bridge($token, $api, $bucket) {
+  // validate token
+  if (drupal_valid_token($token)) {
+    // pull in the posted data
+    $data = $_POST;
+    $path = $data['path'];
+    // path doesn't belong here but need to encapsulate because of / in path
+    unset($data['path']);
+    // prepare request to kick off on the backend
+    $request = array(
+      'method' => 'POST',
+      'api' => $api,
+      'bucket' => $bucket,
+      'path' => $path,
+      'data' => $data,
+    );
+    // issue call
+    $response = _elmsln_api_request($request);
+    // decode and output the response as json; even if it failed which should
+    // give us FALSE encoded as a bool appropriately
+    echo drupal_json_output($response);
+  }
+  exit;
+}
+/**
+ * ELMSLN API request handler
+ * Loads the requested module and executes the requested callback.
+ *
+ * @return json response message to the request
+ */
+function elmsln_api_execute_request() {
+  // Provide a global ELMSLN variable that will be used through out the request.
+  global $_elmsln;
+  global $conf;
+  global $_elmsln_api_processing;
+  $_elmsln_api_processing = TRUE;
+  // ensure this is a basic authorization call
+  if (!elmsln_api_basic_auth()) {
+    return FALSE;
+  }
+  // Memcache requires an additional bootstrap phase to access variables.
+  // this sucks though because it will load every module
+  if (!empty($conf['cache_default_class']) && $conf['cache_default_class'] === 'MemCacheDrupal') {
+    drupal_bootstrap(DRUPAL_BOOTSTRAP_VARIABLES);
+  }
+
+  // Immediately clone the request method so it cannot be altered any further.
+  static $method;
+  if (!isset($method)) {
+    $method = $_SERVER['REQUEST_METHOD'];
+  }
+  // Extract any parameters matching the unique "elmsln" prefixed names from the
+  // referenced global request data and then unset it so it is not processed
+  // again.
+  $_elmsln['module'] = FALSE;
+  $_elmsln['callback'] = FALSE;
+  $global_method = '_' . strtoupper($method);
+  foreach ($_elmsln as $key => $value) {
+    if (isset($GLOBALS[$global_method]["elmsln_$key"])) {
+      $_elmsln[$key] = check_plain($GLOBALS[$global_method]["elmsln_$key"]);
+      unset($GLOBALS[$global_method]["elmsln_$key"]);
+    }
+  }
+
+  // Prevent Devel from hi-jacking the output.
+  $GLOBALS['devel_shutdown'] = FALSE;
+
+  // Retrieve arguments for the current request.
+  $_elmsln['args'] = $GLOBALS[$global_method];
+
+  // Load common functions used for all requests.
+  module_load_include('inc', 'elmsln_api', 'includes/common');
+
+  // Set the default request result to ELMSLN_MENU_NOT_FOUND. The responsibility
+  // of changing the results falls to the request handler.
+  $request_result = ELMSLN_MENU_NOT_FOUND;
+  // ensure we have been told to do something
+  if (!$_elmsln['module'] || !$_elmsln['callback']) {
+    return FALSE;
+  }
+  else {
+    // Only continue if a valid callback is found. Otherwise it will will return
+    // the ELMSLN_MENU_NOT_FOUND integer.
+    $info = elmsln_api_get_callback($_elmsln['module'], $_elmsln['callback']);
+    if (!$info) {
+      drupal_set_message(t('The requested callback "%callback" defined by the "%module" module could not be loaded. Please check your configuration and try again.', array(
+        '%callback' => $_elmsln['callback'],
+        '%module' => $_elmsln['module'],
+      )), 'error', FALSE);
+    }
+    // The very first thing that should be done is checking the callback's
+    // allowed methods.
+    elseif (!in_array($method, $info['methods'])) {
+      $request_result = ELMSLN_MENU_METHOD_NOT_ALLOWED;
+    }
+    else {
+      // Set the delivery callback found in the info.
+      elmsln_api_delivery_callback($info['delivery callback']);
+      module_load_include('inc', 'elmsln_api', 'includes/callback');
+      $request_result = elmsln_api_callback_execute($info);
+    }
+  }
+  // Get the delivery callback to be used.
+  $delivery_callback = elmsln_api_delivery_callback();
+
+  // Because a callback can specify a different delivery method, we don't need
+  // to load this include until it is absolutely necessary.
+  if ($delivery_callback === 'elmsln_api_deliver_json') {
+    module_load_include('inc', 'elmsln_api', 'includes/json');
+  }
+  // look for snake calls which we can perform on anything stupid enough
+  // to attempt it. This can destroy things if not done carefully so understand
+  // that this is the most amazing and dangerous code I've ever written. Honestly
+  // when explaining this to people it blows their minds both in what it's able to
+  // do from a load distribution standpoint as well as complexity of thinking this way
+  // this allows for recursive http requests which can spawn recursive http requests.
+  // Think long and hard before invoking these but if you know why you are doin them
+  // then you have reached the apex of being an elmsln developer. You've gotten to read
+  // this easteregg of a rant about how frigging cool this is and the fact that almost no
+  // one in the world will ever see it, nor will they need to know how or why it works. That's
+  // the beuty and danger of what we do. we make the impossible possible and it's incredible
+  // yet maddening at the same time.
+  if (isset($_elmsln['args']['__snake_stack']) && !empty($_elmsln['args']['__snake_stack'])) {
+    // tee up the next request as well as removing this call
+    // from our queue of calls to ship off
+    while (!isset($path)) {
+      $bucket = array_pop($_elmsln['args']['__snake_stack']);
+      $systype = _cis_connector_system_type($bucket);
+      switch ($systype) {
+        case 'service':
+          $path = '/' . $_elmsln['args']['__course_context'] . '/';
+        break;
+        case 'authority':
+          $path = '/';
+        break;
+        default:
+          // support for skipping things outside authority / service scope
+        break;
+      }
+    }
+    // need to queue module / callback back up for the resigning of the request
+    $_elmsln['args']['elmsln_module'] = $_elmsln['module'];
+    $_elmsln['args']['elmsln_callback'] = $_elmsln['callback'];
+    $version = str_replace('v', '', $_elmsln['args']['q']);
+    // issue call now against the next item in the stack
+    $request = array(
+      'method' => strtoupper($method),
+      'api' => $version,
+      'bucket' => $bucket,
+      'path' => $path,
+      'data' => $_elmsln['args'],
+    );
+    // request the next item while indicating that recursive calls are allowed
+    // so that it gets passed down the snake
+    _elmsln_api_request($request, TRUE, TRUE);
+  }
+  // Deliver the results. The delivery callback is responsible for setting the
+  // appropriate headers, handling the result returned from the callback and
+  // exiting the script properly.
+  call_user_func_array($delivery_callback, array($request_result));
+}
+
+/**
+ * Provides callback information provided by modules.
+ *
+ * @param string $module
+ *   The module name the callback belongs to.
+ * @param string $callback
+ *   The callback name.
+ * @param bool $reset
+ *   For internal use only: Whether to force the stored list of hook
+ *   implementations to be regenerated (such as after enabling a new module,
+ *   before processing hook_enable).
+ *
+ * @return array|bool
+ *   If $module or $callback are provided the info array for the specified
+ *   callback is returned, FALSE if the specified callback is not defined.
+ *   If $module is provided, all the callbacks for the specified module is
+ *   returned, FALSE if specified module is not defined.
+ *   If no parameters are provided, all modules that provide callback
+ *   information is returned, FALSE if no callbacks are defined.
+ */
+function elmsln_api_get_callback($module = NULL, $callback = NULL, $reset = FALSE) {
+  global $_elmsln;
+  // Use the advanced drupal_static() pattern, since this has the potential to
+  // be called quite often on a single page request.
+  static $drupal_static_fast;
+  if (!isset($drupal_static_fast)) {
+    $drupal_static_fast['callbacks'] = &drupal_static(__FUNCTION__);
+  }
+  $callbacks = &$drupal_static_fast['callbacks'];
+
+  // Populate callbacks. Using cache if possible or rebuild if necessary.
+  if ($reset || !isset($callbacks)) {
+    $cid = 'elmsln:callbacks';
+    if (!$reset && ($cache = cache_get($cid)) && $cache->data) {
+      $callbacks = $cache->data;
+    }
+    else {
+      // If we get to this point, this is the first time this is being run
+      // after a cache clear. This single request may take longer, but Drupal
+      // must be fully bootstrapped to detect all hook implementations.
+      if ($_elmsln) {
+        drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
+      }
+      $hook = 'elmsln_api_info';
+      foreach (module_implements($hook, FALSE, $reset) as $_module) {
+        $results = module_invoke($_module, $hook);
+        // Iterate over each module and retrieve the callback info.
+        foreach ($results as $_callback => $info) {
+          $callbacks[$_module][$_callback] = (array) $info;
+          // Provide default if module didn't provide them.
+          $callbacks[$_module][$_callback] += array(
+            'access arguments' => array(),
+            'access callback'  => FALSE,
+            'bootstrap' => DRUPAL_BOOTSTRAP_DATABASE,
+            // Provide a standard function name to use if none is provided.
+            'callback function' => $_module . '_elmsln_api_callback_' . $_callback,
+            'callback arguments' => array(),
+            'delivery callback' => 'elmsln_api_deliver_json',
+            'dependencies' => array(),
+            'includes' => array(),
+            'methods' => array('POST'),
+            'module' => $_module,
+            'process request' => TRUE,
+            'skip init' => TRUE,
+            'xss' => TRUE,
+          );
+          // Invokes hook_elmsln_api_info_alter(). Allow modules to alter the callback
+          // info before it's cached in the database.
+          drupal_alter('elmsln_api_info', $callbacks[$_module][$_callback]);
+        }
+      }
+      cache_set($cid, $callbacks);
+    }
+  }
+
+  // Return a specific callback for a module.
+  if (isset($module) && isset($callback)) {
+    return !empty($callbacks[$module][$callback]) ? $callbacks[$module][$callback] : FALSE;
+  }
+  // Return all callbacks for a module.
+  elseif (isset($module)) {
+    return !empty($callbacks[$module]) ? $callbacks[$module] : FALSE;
+  }
+  // Return all callbacks implemented by any module.
+  return !empty($callbacks) ? $callbacks : FALSE;
+}
+
+/**
+ * Test for Basic Auth headers and attempt to validate
+ * based on where we know the keychain to be if installed
+ * via the automatic installers.
+ * if we can't find it then we need a full bootstrap basically
+ * @return bool TRUE if basic auth validated, FALSE if not
+ */
+function elmsln_api_basic_auth() {
+  // see if we're getting basic authorization headers
+  // if not then see if we can pull them out of the address itself
+  // example taken from restws_basic_authorization but should work for
+  // all forms of basic authorization to allow it to play nice with
+  // front end users tapping into the SSO
+  if (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) && !isset($_SERVER['PHP_AUTH_USER']) && !isset($_SERVER['PHP_AUTH_PW'])) {
+    $authentication = base64_decode(substr($_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 6));
+    list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = explode(':', $authentication);
+  }
+  // if we see an account attemping basic authorization try and match it
+  // to those webservice user accounts in the cis_connector registry
+  if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
+    // load CIS connector so we can quickly load via low level bootstrap
+    drupal_load('module', 'cis_connector');
+    drupal_load('module', 'elmsln_core');
+    // try and pull install profile direct from the database
+    $distro = db_query('SELECT value FROM {variable} WHERE name = :name', array(':name' => 'install_profile'))->fetchField();
+    $distro = unserialize($distro);
+    $distro = elmsln_core_get_profile_key($distro);
+    $settings = _cis_connector_build_registry($distro);
+    // if the username and password match we're golden
+    if (isset($settings['user']) && isset($settings['pass']) && $_SERVER['PHP_AUTH_USER'] == $settings['user'] && $_SERVER['PHP_AUTH_PW'] == $settings['pass']) {
+      // WE CAN DO... ANYTHING.
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * ELMSLN API Request wrapper to streamline hitting elmsln.php
+ * from any service pinging the right address based on loading
+ * of the registry to do so.
+ * @param  array  $request   An array with the following properties
+ *   @param  string method  GET or POST
+ *   @param  string module   module that has the functionality
+ *   @param  string callback callback to call in that module
+ *   @param  array  data     data to send
+ *   @param  string path     path to do the post against like /
+ *   @param  string bucket   which system to connect to
+ *   @param  string api      version of the api call to make
+ * @param  bool $nonblocking if this is a non-blocking call
+ * @param  bool $recursion   whether calls should be allowed to be recursive.
+ *                           if they are, then this call being called by a spider
+ *                           script from elsewhere in the network could be invoking
+ *                           a spider to call back against it. Only disable this
+ *                           flag if you know why you'd want to do something insane
+ *                           like kicking off infinite recursion against apache
+ *                           threads that will continue to expand until your server
+ *                           dies!!!!!! You've been warned, there be dragons here!
+ * @return mixed            response from the associated system
+ */
+function _elmsln_api_request($request, $nonblocking = FALSE, $recursion = FALSE) {
+  global $_elmsln_api_processing;
+  if ($_elmsln_api_processing && !$recursion) {
+    return FALSE;
+  }
+  // force use of normal calls if we are in developer mode
+  if ($nonblocking && variable_get('cis_devel_nonblock', FALSE)) {
+    $nonblocking = FALSE;
+  }
+  // load CIS connector so we can quickly load via low level bootstrap
+  drupal_load('module', 'cis_connector');
+  drupal_load('module', 'elmsln_core');
+  // look for settings for this bucket
+  // @ignore druplart_conditional_assignment
+  if ($settings = _cis_connector_build_registry($request['bucket'])) {
+    // prepare the query to be shipped off
+    $request['data']['q'] = 'v' . $request['api'];
+    // leave a flag for debug purposes if it's nonblocking
+    if ($nonblocking) {
+      $request['_httprl'] = TRUE;
+    }
+    // allow other projects to react to this if we have
+    // a high enough bootstrap; nice thing is this will
+    // just do nothing if we don't
+    drupal_alter('elmsln_api_prerequest', $request);
+    $options = array(
+      'method' => $request['method'],
+      'data' => http_build_query($request['data']),
+      'timeout' => 1,
+      'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
+    );
+    // form the address to call
+    $address = _cis_connector_format_address($settings, $request['path']);
+    // allow for non-blocking calls which require httprl
+    // which requires a full bootstrap. This is why it is
+    // not the default option. The default for the variable
+    // is to wait for a response since low-level bootstraps
+    // SHOULD be very fast. In cases that kick off high-level
+    // bootstraps against many targets it might be more efficient
+    // to issue them all as non-blocking so there's only 1
+    // full bootstrap that's waited for.
+    if ($nonblocking) {
+      $options['blocking'] = FALSE;
+      drupal_load('module', 'httprl');
+      httprl_request($address . 'elmsln.php', $options);
+      $tmp = httprl_send_request();
+      // this is non-blocking so can't really be modified but
+      // could still be useful for debugging
+      return TRUE;
+    }
+    else {
+      $tmp = drupal_http_request($address . 'elmsln.php', $options);
+      // allow other projects to react to this if we have
+      // a high enough bootstrap; nice thing is this will
+      // just do nothing if we don't
+      drupal_alter('elmsln_api_postrequest', $tmp);
+      if (isset($tmp->data)) {
+        return $tmp->data;
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Multiple request calls as requests.
+ * @see _elmsln_api_request().
+ */
+function _elmsln_api_requests($requests, $nonblocking = FALSE, $recursion = FALSE) {
+  $responses = array();
+  // loop through and queue the requests
+  foreach ($requests as $key => $request) {
+    $responses[$key] = _elmsln_api_request($request, $nonblocking, $recursion);
+  }
+  return $responses;
+}
+
+/**
+ * Issue non blocking calls after queuing them up.
+ * This has no return because non-blocking assume completion.
+ * @param  array $requests requests that need issued
+ */
+function _elmsln_api_nonblocking_requests($requests, $recursion = FALSE) {
+  global $_elmsln_api_processing;
+  if ($_elmsln_api_processing && !$recursion) {
+    return FALSE;
+  }
+  // loop through and queue the requests
+  foreach ($requests as $request) {
+    _elmsln_api_request($request, TRUE, $recursion);
+  }
+  return count($requests);
+}
+
+/**
+ * Keep a course in sync across the entire network.
+ * This call will update information about a course
+ * whether originating from or going to CIS, any authority
+ * or any service. The most common use-case is keeping the
+ * title of the course in sync across all services.
+ *
+ * @param  array  $properties       an array of items to keep in sync
+ *         possible values include: title, slogan, machine_name, uuid
+ * @param  string $api         api version to use
+ * @param  bool   $nonblocking if the call should be async or not
+ * @see  _elmsln_api_authority_request()
+ * @see  _elmsln_api_network_request()
+ * @see  _elmsln_api_request()
+ */
+function _elmsln_api_course_sync($properties, $api = '1', $nonblocking = TRUE) {
+  // need to kill any session level context for course
+  unset($_SESSION['cis_course_context']);
+  global $_elmsln_api_processing;
+  if ($_elmsln_api_processing) {
+    return FALSE;
+  }
+  // prepare requests to kick off settings
+  $requests = array();
+  if (isset($properties['title'])) {
+    $requests[] = array(
+      'elmsln_module' => 'elmsln_api',
+      'elmsln_callback' => 'vset',
+      'name' => 'site_name',
+      'value' => $properties['title'],
+    );
+  }
+  if (isset($properties['slogan'])) {
+    $requests[] = array(
+      'elmsln_module' => 'elmsln_api',
+      'elmsln_callback' => 'vset',
+      'name' => 'site_slogan',
+      'value' => $properties['slogan'],
+    );
+  }
+  if (isset($properties['machine_name'])) {
+    $requests[] = array(
+      'elmsln_module' => 'elmsln_api',
+      'elmsln_callback' => 'vset',
+      'name' => 'cis_course_machine_name',
+      'value' => $properties['machine_name'],
+    );
+  }
+  // ship these requests across the network
+  _elmsln_api_network_request($requests, $api, $nonblocking);
+  // now go after the authorities
+  $query = array(
+    'entityCondition' => array(
+      'bundle' => 'cis_course',
+      'entity_type'   => 'node',
+    ),
+    'fieldCondition' => array(
+      'field_course_machine_name' => array('value', _cis_connector_course_context(), '='),
+    ),
+  );
+  $data = array();
+  // support for title, the easiest one
+  if (isset($properties['title'])) {
+    $data['title'] = $properties['title'];
+  }
+  // support for machine name
+  if (isset($properties['machine_name'])) {
+    $data['field_course_machine_name'] = array(
+      'und' => array(
+        0 => array(
+          'value' => $properties['machine_name'],
+        )
+      )
+    );
+  }
+  // support for uuid
+  if (isset($properties['uuid'])) {
+    $data['field_cis_course_uuid'] = array(
+      'und' => array(
+        0 => array(
+          'value' => $properties['uuid'],
+        )
+      )
+    );
+  }
+  // force these system level assets to be root ownership
+  $data['uid'] = 1;
+  // force pathauto to be enabled
+  $data['path'] = array('pathauto' => 1);
+  $request = array(
+    array(
+      'method' => 'POST',
+      'api' => $api,
+      'data' => array(
+        'elmsln_module' => 'elmsln_api',
+        'elmsln_callback' => 'entity_sync',
+        'query' => $query,
+        'data' => $data,
+      ),
+    )
+  );
+  _elmsln_api_authority_request($request, $nonblocking, array('cis'));
+  // ensure this isn't CIS so we don't get an infinite loop!
+  if (elmsln_core_get_profile_key() != 'cis') {
+    // hit CIS with the same update
+    $query = array(
+      'entityCondition' => array(
+        'bundle' => 'course',
+        'entity_type'   => 'node',
+      ),
+      'fieldCondition' => array(
+        'field_machine_name' => array('value', _cis_connector_course_context(), '='),
+      ),
+    );
+    $data = array();
+    // set title the same
+    if (isset($properties['title'])) {
+      $data['title'] = $properties['title'];
+    }
+    // update "course title" to be slogan
+    if (isset($properties['slogan'])) {
+      $data['field_course_title'] = array(
+        'und' => array(
+          0 => array(
+            'value' => $properties['slogan'],
+          )
+        )
+      );
+    }
+    // support for machine name which can get dicy
+    if (isset($properties['machine_name'])) {
+      $data['field_machine_name'] = array(
+        'und' => array(
+          0 => array(
+            'value' => $properties['machine_name'],
+          )
+        )
+      );
+    }
+    // support for uuid
+    if (isset($properties['uuid'])) {
+      $data['field_cis_course_uuid'] = array(
+        'und' => array(
+          0 => array(
+            'value' => $properties['uuid'],
+          )
+        )
+      );
+    }
+    // force these system level assets to be root ownership
+    $data['uid'] = 1;
+    // force pathauto to be enabled
+    $data['path'] = array('pathauto' => 1);
+    // send it off
+    $request = array(
+      'method' => 'POST',
+      'api' => $api,
+      'bucket' => 'cis',
+      'path' => '/',
+      'data' => array(
+        'elmsln_module' => 'elmsln_api',
+        'elmsln_callback' => 'entity_sync',
+        'query' => $query,
+        'data' => $data,
+      ),
+    );
+    _elmsln_api_request($request, $nonblocking);
+  }
+}
+
+/**
+ * Keep a section in sync across the entire network.
+ * This call will update information about a section
+ * everywhere except the CIS (which is where sections start)
+ *
+ * @param  array  $properties       an array of items to keep in sync
+ *         possible values include: title, section_id, course, active
+ * @param  string $api         api version to use
+ * @param  bool   $nonblocking if the call should be async or not
+ * @see  _elmsln_api_authority_request()
+ * @see  _elmsln_api_network_request()
+ * @see  _elmsln_api_request()
+ */
+function _elmsln_api_section_sync($properties, $api = '1', $nonblocking = TRUE) {
+  // need to kill any session level context for course
+  unset($_SESSION['cis_section_context']);
+  global $_elmsln_api_processing;
+  if ($_elmsln_api_processing) {
+    return FALSE;
+  }
+  // prepare requests to kick off settings
+  $requests = array();
+  // go after all non-CIS systems
+  $query = array(
+    'entityCondition' => array(
+      'bundle' => 'section',
+      'entity_type'   => 'node',
+    ),
+    'fieldCondition' => array(
+      'field_section_id' => array('value', $properties['section_id'], '='),
+    ),
+  );
+  $data = array();
+  // support for title, the easiest one
+  if (isset($properties['title'])) {
+    $data['title'] = $properties['title'];
+  }
+  // support for field_section_id
+  if (isset($properties['section_id'])) {
+    $data['field_section_id'] = array(
+      'und' => array(
+        0 => array(
+          'value' => $properties['section_id'],
+        )
+      )
+    );
+  }
+  // support for course
+  if (isset($properties['course'])) {
+    $data['field_section_course_ref'] = array(
+      'und' => array(
+        0 => array(
+          'target_id' => $properties['course'],
+        )
+      )
+    );
+  }
+  // support for course
+  if (isset($properties['active'])) {
+    $data['field_cis_active'] = array(
+      'und' => array(
+        0 => array(
+          'value' => $properties['active'],
+        )
+      )
+    );
+  }
+  // force these system level assets to be root ownership
+  $data['uid'] = 1;
+  // force pathauto to be enabled
+  $data['path'] = array('pathauto' => 1);
+  $requests = array(
+    array(
+      'method' => 'POST',
+      'api' => $api,
+      'data' => array(
+        'elmsln_module' => 'elmsln_api',
+        'elmsln_callback' => 'entity_sync',
+        'query' => $query,
+        'data' => $data,
+      ),
+    )
+  );
+  _elmsln_api_authority_request($requests, $nonblocking, array('cis', 'ecd'));
+  // ship these requests across the network
+  $requests = array(
+    array(
+      'elmsln_module' => 'elmsln_api',
+      'elmsln_callback' => 'entity_sync',
+      'query' => $query,
+      'data' => $data,
+    )
+  );
+  _elmsln_api_network_request($requests, $api, $nonblocking);
+}
+
+/**
+ * Issue a call against a course network
+ * @param  array $requests an array of requests
+ * @see  _elmsln_api_request()
+ */
+function _elmsln_api_network_request($requests, $api = '1', $nonblocking = FALSE, $path = '', $recursion = FALSE) {
+  global $_elmsln_api_processing;
+  if ($_elmsln_api_processing && !$recursion) {
+    return FALSE;
+  }
+  // force use of normal calls if we are in developer mode
+  if ($nonblocking && variable_get('cis_devel_nonblock', FALSE)) {
+    $nonblocking = FALSE;
+  }
+  if ($nonblocking) {
+    drupal_load('module', 'httprl');
+  }
+  // load CIS connector so we can quickly load via low level bootstrap
+  drupal_load('module', 'cis_connector');
+  drupal_load('module', 'elmsln_core');
+  // build whole registry since we're calling multiple things
+  $settings = _cis_connector_build_registry();
+  // use course context for path unless it's been hard coded
+  if ($path == '') {
+    // add path base slash
+    $path = '/' . _cis_connector_course_context();
+    // if we got a course context then add trailing
+    // this should be almost impossible but good to account for
+    if ($path != '/') {
+      $path .= '/';
+    }
+  }
+  // ensure we have other course services in this network
+  if ($services = _cis_connector_transaction('other_services')) {
+    // do it per request so we can group the spidering
+    foreach ($requests as $data) {
+      // build an array for spidering each request
+      $nonblock = array();
+      $addresses = array();
+      $returned_data = array();
+      // loop through each service
+      foreach ($services as $service) {
+        // make sure they don't match the existing one
+        if ($service['field_distribution'] != elmsln_core_get_profile_key()) {
+          $request = array(
+            'method' => 'POST',
+            'api' => $api,
+            'bucket' => $service['field_distribution'],
+            'path' => $path,
+            'data' => $data,
+          );
+          // if we are blocking then ship off now
+          if (!$nonblocking) {
+            $returned_data[] = _elmsln_api_request($request, $nonblocking, $recursion);
+          }
+          else {
+            // queue these after formulation, the addresses are the most importantant
+            $nonblock[] = $request['bucket'];
+            // form the address to call for each service
+            $addresses[$request['bucket']] = _cis_connector_format_address($settings[$request['bucket']], $request['path']) . 'elmsln.php';
+          }
+        }
+      }
+      // if we have nonblocking calls and a collection of them
+      // then kick this off to multi-process quickly and without
+      // looking back!
+      if (!empty($request) && $nonblocking && isset($nonblock)) {
+        // prepare the query to be shipped off
+        $request['data']['q'] = 'v' . $request['api'];
+        if (!isset($request['data']['__course_context'])) {
+          $request['data']['__course_context'] = _cis_connector_course_context();
+        }
+        // validate buckets are all alive before queueing this up
+        _elmsln_api_is_alive($nonblock);
+        // queue up the request
+        if (!empty($nonblock)) {
+          $bucket = array_pop($nonblock);
+          $request['data']['__snake_stack'] = $nonblock;
+          // leave a flag for debug purposes if it's nonblocking
+          $request['_httprl'] = TRUE;
+          $options = array(
+            'method' => $request['method'],
+            'data' => http_build_query($request['data']),
+            'timeout' => 1,
+            'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
+            'blocking' => FALSE,
+          );
+          // use this to help debug snakes if needed
+          //watchdog('course', $request['data']['__course_context']);
+          //watchdog('whereitgoes', $bucket);
+          //watchdog('allplacestogo', serialize($nonblock));
+          httprl_request($addresses[$bucket], $options);
+          $tmp = httprl_send_request();
+        }
+      }
+    }
+    if (!empty($returned_data)) {
+      return $returned_data;
+    }
+    else {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Issue a call against all authorities in the network by
+ * looping through and rewriting all incoming requests to
+ * by set against the different detected authorities at any
+ * given time.
+ * @param  array $requests         an array of requests
+ * @param  array $ignored_buckets  list of authorities to ignore
+ * @see  _elmsln_api_request()
+ */
+function _elmsln_api_authority_request($requests, $nonblocking = FALSE, $ignored_buckets = array(), $recursion = FALSE) {
+  global $_elmsln_api_processing;
+  if ($_elmsln_api_processing && !$recursion) {
+    return FALSE;
+  }
+  // force use of normal calls if we are in developer mode
+  if ($nonblocking && variable_get('cis_devel_nonblock', FALSE)) {
+    $nonblocking = FALSE;
+  }
+  if ($nonblocking) {
+    drupal_load('module', 'httprl');
+  }
+  // load CIS connector so we can quickly load via low level bootstrap
+  drupal_load('module', 'cis_connector');
+  drupal_load('module', 'elmsln_core');
+  // build whole registry since we're calling multiple things
+  $settings = _cis_connector_build_registry();
+  // sniff out all other authorities
+  $authorities = array();
+  foreach ($settings as $bucket => $service) {
+    if (_cis_connector_system_type($bucket) == 'authority' && $bucket != elmsln_core_get_profile_key() && !in_array($bucket, $ignored_buckets)) {
+      $authorities[$bucket] = $service;
+    }
+  }
+  // ensure we have other course authorities in this network
+  if (!empty($authorities)) {
+    // do it per request so we can group the spidering
+    foreach ($requests as $request) {
+      // build an array for spidering each request
+      $nonblock = array();
+      $addresses = array();
+      // loop through each authority
+      foreach ($authorities as $bucket => $authority) {
+        // make sure they don't match the existing one
+        $request['bucket'] = $bucket;
+        $request['path'] = '/';
+        // if we are blocking then ship off now
+        if (!$nonblocking) {
+          $returned_data[] = _elmsln_api_request($request, $nonblocking, $recursion);
+        }
+        else {
+          // queue these after formulation, the addresses are the most importantant
+          $nonblock[] = $request['bucket'];
+          // form the address to call for each service
+          $addresses[$request['bucket']] = _cis_connector_format_address($settings[$request['bucket']], $request['path']) . 'elmsln.php';
+        }
+      }
+      // if we have nonblocking calls and a collection of them
+      // then kick this off to multi-process quickly and without
+      // looking back!
+      if ($nonblocking && isset($nonblock)) {
+        // prepare the query to be shipped off
+        $request['data']['q'] = 'v' . $request['api'];
+        if (!isset($request['data']['__course_context'])) {
+          $request['data']['__course_context'] = _cis_connector_course_context();
+        }
+        // validate buckets are all alive before queueing this up
+        _elmsln_api_is_alive($nonblock);
+        if (!empty($nonblock)) {
+          // queue up the
+          $bucket = array_pop($nonblock);
+          $request['data']['__snake_stack'] = $nonblock;
+          // leave a flag for debug purposes if it's nonblocking
+          $request['_httprl'] = TRUE;
+          $options = array(
+            'method' => $request['method'],
+            'data' => http_build_query($request['data']),
+            'timeout' => 1,
+            'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
+            'blocking' => FALSE,
+          );
+          httprl_request($addresses[$bucket], $options);
+          $tmp = httprl_send_request();
+        }
+      }
+    }
+    if (!empty($returned_data)) {
+      return $returned_data;
+    }
+    else {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Validate that buckets passed in are alive.
+ * @param  array &$buckets array of buckets to ask their status.
+ */
+function _elmsln_api_is_alive(&$buckets) {
+  global $_elmsln;
+  $tmp = $_elmsln['args'];
+  // need to queue module / callback back up for the resigning of the request
+  foreach ($buckets as $key => $bucket) {
+    $systype = _cis_connector_system_type($bucket);
+    switch ($systype) {
+      case 'service':
+        if (!isset($_elmsln['args']['__course_context'])) {
+          $_elmsln['args']['__course_context'] = _cis_connector_course_context();
+        }
+        $path = '/' . $_elmsln['args']['__course_context'] . '/';
+      break;
+      case 'authority':
+        $path = '/';
+      break;
+      default:
+        // support for skipping things outside authority / service scope
+      break;
+    }
+    $tmp['elmsln_module'] = 'elmsln_api';
+    $tmp['elmsln_callback'] = 'is_alive';
+    // ensure that this is alive before hitting it, otherwise we'll break
+    // the snake and not everyone will get the message and we'll be sad
+    $request = array(
+      'method' => 'POST',
+      'api' => 1,
+      'bucket' => $bucket,
+      'path' => $path,
+      'data' => $tmp,
+    );
+    // this will ensure we are alive before trying to make the call out
+    $is_alive = _elmsln_api_request($request, FALSE, TRUE);
+    // convert json
+    $is_alive = drupal_json_decode($is_alive);
+    // verify that this call can go through before attempting
+    // this helps avoid poisned / bad registries, network issue, etc
+    // from breaking the snake chain call
+    if (isset($is_alive['is_alive']) && $is_alive['is_alive']) {
+    }
+    else {
+      unset($buckets[$key]);
+    }
+  }
+}
+
+/**
+ * Implements hook_elmsln_api_info().
+ */
+function elmsln_api_elmsln_api_info() {
+  // alive test
+  $callbacks['is_alive'] = array(
+    'methods' => array('GET', 'POST'),
+    'file' => 'callbacks/v1/is_alive.inc',
+  );
+  // remote cache bin wipe
+  $callbacks['clear_cache_bin'] = array(
+    'methods' => array('GET', 'POST'),
+    'file' => 'callbacks/v1/clear_cache_bin.inc',
+    'includes' => array('cache'),
+    'dependencies' => array('system'),
+  );
+  // remote vset
+  $callbacks['vset'] = array(
+    'methods' => array('POST'),
+    'bootstrap' => DRUPAL_BOOTSTRAP_VARIABLES,
+    'file' => 'callbacks/v1/vset.inc',
+  );
+
+  // remote entity update
+  $callbacks['entity_update'] = array(
+    'methods' => array('POST'),
+    'bootstrap' => DRUPAL_BOOTSTRAP_FULL,
+    'file' => 'callbacks/v1/entity_update.inc',
+  );
+
+  // remote entity sync
+  $callbacks['entity_sync'] = array(
+    'methods' => array('POST'),
+    'bootstrap' => DRUPAL_BOOTSTRAP_FULL,
+    'file' => 'callbacks/v1/entity_sync.inc',
+  );
+
+  // available_types
+  $callbacks['available_types'] = array(
+    'methods' => array('POST'),
+    'bootstrap' => DRUPAL_BOOTSTRAP_FULL,
+    'file' => 'callbacks/v1/available_types.inc',
+  );
+
+  // remote entity update at hashed <p> location
+  $callbacks['hash_insert'] = array(
+    'methods' => array('POST'),
+    'bootstrap' => DRUPAL_BOOTSTRAP_FULL,
+    'file' => 'callbacks/v1/hash_insert.inc',
+  );
+
+  // remote entity update
+  $callbacks['theme_settings'] = array(
+    'methods' => array('POST'),
+    'bootstrap' => DRUPAL_BOOTSTRAP_VARIABLES,
+    'file' => 'callbacks/v1/theme_settings.inc',
+  );
+
+  return $callbacks;
+}
+

@@ -1,0 +1,78 @@
+<?php
+/**
+ * @file
+ * Install CIS Section.
+ */
+
+/**
+ * Implements hook_update_N().
+ *
+ * Fix master_ concept to be 'master' everywhere and all
+ * services will have a master section concept.
+ */
+function cis_section_update_7001(&$sandbox) {
+  $query = new EntityFieldQuery();
+  // pull all nodes
+  $query->entityCondition('entity_type', 'node')
+  // that are sections
+  ->entityCondition('bundle', 'section')
+  // where it looks like the old master format
+  ->fieldCondition('field_section_id', 'value', 'master_%', 'like')
+  // load all possible results in system, should only be 1 though
+  ->addMetaData('account', user_load(1));
+  // store result
+  $result = $query->execute();
+  // ensure we have results
+  if (isset($result['node'])) {
+    $nids = array_keys($result['node']);
+    $sections = entity_load('node', $nids);
+    // loop through the sections
+    foreach ($sections as $section) {
+      $section->field_section_id[LANGUAGE_NONE][0]['value'] = 'master';
+      // save the change so "master_" goes away
+      node_save($section);
+    }
+  }
+}
+
+/**
+ * Implements hook_update_N().
+ *
+ * Fix for section default value changing to FALSE
+ * instead of the NO_SECTION or 'default' values
+ * that were previously possible.
+ */
+function cis_section_update_7002(&$sandbox) {
+  $tmp = variable_get('cis_section_default', FALSE);
+  if ($tmp == 'default' || $tmp == 'NO_SECTION') {
+    variable_set('cis_section_default', FALSE);
+  }
+}
+
+/**
+ * Revert section to make this view strain the server less when
+ * working in larger environments.
+ */
+function cis_section_update_7003(&$sandbox) {
+  features_revert_module('cis_section');
+}
+
+/**
+ * Revert views component of cis_section
+ */
+function cis_section_update_7004(&$sandbox) {
+  features_revert(array('cis_section' => array('views')));
+}
+
+/**
+ * Revert views component of cis_section updated caching to content-based 
+ */
+function cis_section_update_7005(&$sandbox) {
+  features_revert(array('cis_section' => array('views')));
+}
+/**
+ * Revert views component of cis_section updated caching to content-based 
+ */
+function cis_section_update_7006(&$sandbox) {
+  features_revert(array('cis_section' => array('views')));
+}
