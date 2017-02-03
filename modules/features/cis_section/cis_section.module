@@ -6,6 +6,7 @@
 
 define('CIS_SECTION_STUDENT', 'student');
 define('CIS_SECTION_PAST_STUDENT', 'past student');
+define('CIS_SECTION_STRICT_ACCESS', TRUE);
 
 include_once 'cis_section.features.inc';
 
@@ -14,6 +15,26 @@ include_once 'cis_section.features.inc';
  */
 function cis_section_page_build(&$page) {
   drupal_add_css(drupal_get_path('module', 'cis_section') . '/cis_section.css');
+}
+
+/**
+ * Implements hook_menu().
+ */
+function cis_section_menu() {
+  $items['api/v1/elmsln/sections'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('section', NULL, NULL),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items['api/v1/elmsln/sections/%'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('section', 4, 'query'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
 }
 
 /**
@@ -39,6 +60,90 @@ function cis_section_og_context_negotiation_info() {
   );
 
   return $providers;
+}
+
+/**
+ * Implements hook_elmsln_jsapi_info().
+ */
+function cis_section_elmsln_jsapi_info() {
+  // section api router
+  $items['section'] = array(
+    'type'   => 'node',
+    'bundle' => 'section',
+    'modify' => '_cle_section_v1_section_modify',
+    'list'   => '_cis_section_v1_get_sections',
+    'output' => '_cis_section_v1_section_output',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_elmsln_jsapi_user_request_alter().
+ */
+function cis_section_elmsln_jsapi_user_request_alter(&$vars) {
+  // add on sections this user is apart of
+  $field_conditions = array('field_cis_active' => array('value', 1, '='));
+  $property_conditions = array('status' => array(NODE_PUBLISHED, '='));
+  $orderby = array('field_cis_active' => array('value', 'DESC'));
+  $sections = _cis_connector_assemble_entity_list('node', 'section', 'nid', '_entity', $field_conditions, $property_conditions, $orderby);
+  foreach ($sections as $nid => $section) {
+    $vars['sections'][$nid] = _cis_section_v1_section_output($section);
+  }
+}
+
+/**
+ * Callback for outputting a section via ELMSLN JS API
+ * @param  object $node node object that is a section
+ * @return array       structured response of how to render a section
+ */
+function _cis_section_v1_section_output($node) {
+  // we can never update or delete via this method based on data model
+  $metadata = array(
+    'canUpdate' => 0,
+    'canDelete' => 0,
+  );
+
+  // this will be our json formatted output
+  $return = array(
+    'id' => (int)$node->nid,
+    'uid' => (int)$node->uid,
+    'uuid' => $node->uuid,
+    'title' => $node->title,
+    'status' => (int)$node->status,
+    'created' => Date('c', $node->created),
+    'section_id' => $node->field_section_id['und'][0]['safe_value'],
+    'active' => (int)$node->field_cis_active['und'][0]['value'],
+    'metadata' => $metadata,
+    'links' => array(
+      'self' => $base_url . '/api/v1/elmsln/section/' . $node->nid,
+    ),
+  );
+
+  return $return;
+}
+
+/**
+ * Callback to return a list of sections.
+ * @return array listing of sections the user has access to
+ */
+function _cis_section_v1_get_sections($filter = array()) {
+  $items = array();
+  $field_conditions = array();
+  $property_conditions = array('status' => array(NODE_PUBLISHED, '='));
+  if (isset($filter['section'])) {
+    $property_conditions['nid'] = array($filter['section'], '=');
+  }
+  $orderby = array('field_cis_active' => array('value', 'DESC'));
+  $items = _cis_connector_assemble_entity_list('node', 'section', 'nid', '_entity', $field_conditions, $property_conditions, $orderby);
+  return $items;
+}
+
+/**
+ * This isn't allowed since section is globally managed by CIS.
+ * @return bool        value is always FALSE for data model purposes
+ */
+function _cle_section_v1_section_modify($node, $params = NULL) {
+  return FALSE;
 }
 
 /**
@@ -271,13 +376,19 @@ function cis_section_node_insert($node) {
     $uids = _cis_connector_load_users_by_role($roles);
     // load all user entities in the list
     $users = entity_load('user', $uids);
+    // load group role by name
+    $ogrole = _cis_section_og_role_load_by_name('staff');
     foreach ($users as $member) {
       $values = array(
         'entity_type' => 'user',
         'entity' => $member,
       );
-      // add user to the group
-      og_group('node',$node->nid, $values);
+      // add user to the group as a member
+      og_group('node', $node->nid, $values);
+      // give them the special staff role if it exists
+      if ($ogrole) {
+        _cis_section_og_role_grant('node', $node->nid, $member->uid, $ogrole->rid, 'update');
+      }
     }
     // account for newly created sections being activated
     // so we can react immediately
@@ -346,19 +457,23 @@ function cis_section_cis_section_deactivate() {
  * Callback for hook_cis_section_deactivate().
  */
 function _cis_section_deactivate_section($node) {
-  // standard conversion of student to past student roles
-  $student = user_role_load_by_name(CIS_SECTION_STUDENT);
-  $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
-  $current = _cis_section_load_users_by_gid($node->nid, $student->rid);
-  // find users that no longer came across
-  $diff = array_diff($current, array());
-  foreach ($diff as $uid) {
-    $account = user_load($uid);
-    // drop student role
-    unset($account->roles[$student->rid]);
-    // gain past student role
-    $account->roles[$past->rid] = $past->name;
-    user_save($account);
+  // see if developer variable exists to prevent drop of access
+  // if we no longer see the account come across
+  if (variable_get('cis_section_strict_access', CIS_SECTION_STRICT_ACCESS)) {
+    // standard conversion of student to past student roles
+    $student = user_role_load_by_name(CIS_SECTION_STUDENT);
+    $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
+    $current = _cis_section_load_users_by_gid($node->nid, $student->rid);
+    // find users that no longer came across
+    $diff = array_diff($current, array());
+    foreach ($diff as $uid) {
+      $account = user_load($uid);
+      // drop student role
+      unset($account->roles[$student->rid]);
+      // gain past student role
+      $account->roles[$past->rid] = $past->name;
+      user_save($account);
+    }
   }
 }
 
@@ -393,13 +508,25 @@ function _cis_section_create_accounts($roster) {
       if (is_array($userdata)) {
         $role_name = $userdata['role'];
         $mail = $userdata['mail'];
-        $pass = $userdata['pass'];
+        if (isset($userdata['pass'])) {
+          $pass = $userdata['pass'];
+        }
       }
       else {
         $role_name = $userdata;
       }
       // convert role name to object bc of stupid storage convention for account creation
       $role = user_role_load_by_name($role_name);
+      // ensure we got something, otherwise just make it auth
+      if (!isset($role->rid) || empty($role->rid) || $role->rid == 0) {
+        $role->rid = 2;
+        $role->name = 'authenticated user';
+        $ogrole = FALSE;
+      }
+      else {
+        // try and load the group role that matches
+        $ogrole = _cis_section_og_role_load_by_name($role_name);
+      }
       // try and load the account first
       // @ignore druplart_conditional_assignment
       if (!$account = user_load_by_name($name)) {
@@ -460,29 +587,37 @@ function _cis_section_create_accounts($roster) {
         'entity' => $account,
       );
       og_group('node', $gid, $values);
+      // give them the special staff role if it exists
+      if ($ogrole) {
+        _cis_section_og_role_grant('node', $gid, $account->uid, $ogrole->rid, 'update');
+      }
       // rip membership names to uid array for comparison
       $actual[] = $account->uid;
     }
-    // compare members that just came across to members currently (that are students)
-    // anyone currently that didn't just come across, gets role dropped
-    // they gain past student
-    $student = user_role_load_by_name(CIS_SECTION_STUDENT);
-    $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
-    if (isset($gid)) {
-      $current = _cis_section_load_users_by_gid($gid, $student->rid);
-    }
-    else {
-      $current = array();
-    }
-    // find users that no longer came across
-    $diff = array_diff($current, $actual);
-    foreach ($diff as $uid) {
-      $account = user_load($uid);
-      // drop student role
-      unset($account->roles[$student->rid]);
-      // gain past student role
-      $account->roles[$past->rid] = $past->name;
-      user_save($account);
+    // see if developer variable exists to prevent drop of access
+    // if we no longer see the account come across
+    if (variable_get('cis_section_strict_access', CIS_SECTION_STRICT_ACCESS)) {
+      // compare members that just came across to members currently (that are students)
+      // anyone currently that didn't just come across, gets role dropped
+      // they gain past student
+      $student = user_role_load_by_name(CIS_SECTION_STUDENT);
+      $past = user_role_load_by_name(CIS_SECTION_PAST_STUDENT);
+      if (isset($gid)) {
+        $current = _cis_section_load_users_by_gid($gid, $student->rid);
+      }
+      else {
+        $current = array();
+      }
+      // find users that no longer came across
+      $diff = array_diff($current, $actual);
+      foreach ($diff as $uid) {
+        $account = user_load($uid);
+        // drop student role
+        unset($account->roles[$student->rid]);
+        // gain past student role
+        $account->roles[$past->rid] = $past->name;
+        user_save($account);
+      }
     }
   }
 }
@@ -591,10 +726,8 @@ function cis_section_user_insert(&$edit, $account, $category) {
     $query->entityCondition('entity_type', 'node')
     // that are sections
     ->entityCondition('bundle', 'section')
-    // where it looks like master
-    // @todo we need to account for inserts of users again authority systems
-    // while still putting them in the roster correctly
-    ->fieldCondition('field_section_id', 'value', CIS_SECTION_MASTER)
+    // where it looks like master or master_ for authorities
+    ->fieldCondition('field_section_id', 'value', CIS_SECTION_MASTER, 'STARTS_WITH')
     // load all possible results in system, should only be 1 though
     ->addMetaData('account', user_load(1));
     // store result
@@ -603,13 +736,21 @@ function cis_section_user_insert(&$edit, $account, $category) {
     if (isset($result['node'])) {
       $nids = array_keys($result['node']);
       $sections = entity_load('node', $nids);
-      $section = array_pop($sections);
-      $values = array(
-        'entity_type' => 'user',
-        'entity' => $account,
-      );
-      // add user to the group
-      og_group('node', $section, $values);
+      // loop through sections adding user to master / roles in each
+      foreach ($sections as $section) {
+        $values = array(
+          'entity_type' => 'user',
+          'entity' => $account,
+        );
+        // add user to the group
+        og_group('node', $section->nid, $values);
+        // run through the account granting roles to this to match
+        foreach ($account->roles as $key => $name) {
+          if ($ogrole = _cis_section_og_role_load_by_name($name)) {
+            _cis_section_og_role_grant('node', $section->nid, $account->uid, $ogrole->rid, 'insert');
+          }
+        }
+      }
     }
   }
 }
@@ -647,4 +788,77 @@ function cis_section_elmsln_api_info() {
   );
 
   return $callbacks;
+}
+
+/**
+ * Grant a group role to a user.
+ * @see  og_role_grant this is a fork of that because that function
+ *                     isn't allowed to add things to users while
+ *                     being saved the first time.
+ *
+ * @param $group_type
+ *   The entity type of the group.
+ * @param $gid
+ *   The group ID.
+ * @param $uid
+ *   The user ID.
+ * @param $rid
+ *   The role ID.
+ */
+function _cis_section_og_role_grant($group_type, $gid, $uid, $rid, $mode = 'update') {
+  // Make sure the role is valid.
+  $group = entity_load_single($group_type, $gid);
+  list(,, $bundle) = entity_extract_ids($group_type, $group);
+  $og_roles = og_roles($group_type, $bundle, $gid, FALSE, FALSE);
+  if (empty($og_roles[$rid])) {
+    // Role isn't valid.
+    return;
+  }
+  $add = FALSE;
+  // Get the existing user roles.
+  if ($mode == 'update') {
+    // ensure they don't already have this role
+    $user_roles = og_get_user_roles($group_type, $gid, $uid);
+    // if they don't, then just ignore everything here
+    if (empty($user_roles[$rid])) {
+      $add = TRUE;
+    }
+  }
+  elseif ($mode == 'insert') {
+    $add = TRUE;
+  }
+  // only add the role if we've been told to do so
+  if ($add) {
+    $role = new stdClass();
+    $role->uid = $uid;
+    $role->rid = $rid;
+    $role->group_type = $group_type;
+    $role->gid = $gid;
+
+    drupal_write_record('og_users_roles', $role);
+    og_invalidate_cache();
+    module_invoke_all('og_role_grant', $group_type, $gid, $uid, $rid);
+
+    if (module_exists('rules'))  {
+      rules_invoke_event('og_role_grant', og_get_membership($group_type, $gid, 'user', $uid), entity_metadata_wrapper('user', $uid), $rid);
+    }
+  }
+}
+
+/**
+ * Fetch a user role from database by name.
+ *
+ * @param $name
+ *   A string with the role name.
+ *
+ * @return
+ *   A fully-loaded role object if a role name the given name exists,
+ *   FALSE otherwise.
+ */
+function _cis_section_og_role_load_by_name($name) {
+  return db_select('og_role', 'r')
+    ->fields('r')
+    ->condition('name', $name)
+    ->execute()
+    ->fetchObject();
 }
