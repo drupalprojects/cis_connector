@@ -35,12 +35,141 @@ define('ELMSLN_MENU_SITE_ONLINE', 5);
  * Internal menu status code - Request method is not allowed.
  */
 define('ELMSLN_MENU_METHOD_NOT_ALLOWED', 6);
+define('ELMSLN_API_BASE_PATH', 'api');
 
 /**
  * Implements hook_menu().
  */
 function elmsln_api_menu() {
-  $items['elmsln_api'] = array(
+  $items[ELMSLN_API_BASE_PATH] = array(
+    'page callback' => '_elmsln_api_tree',
+    'page arguments' => array(ELMSLN_API_BASE_PATH, TRUE),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1'] = array(
+    'page callback' => '_elmsln_api_tree',
+    'page arguments' => array(ELMSLN_API_BASE_PATH . '/v1', TRUE),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln'] = array(
+    'page callback' => '_elmsln_api_tree',
+    'page arguments' => array(ELMSLN_API_BASE_PATH . '/v1/elmsln', TRUE),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/menus'] = array(
+    'page callback' => '_elmsln_api_v1_list_menus',
+    'page arguments' => array(),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/menus/%'] = array(
+    'page callback' => '_elmsln_api_v1_get_menu',
+    'page arguments' => array(4),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  // load all bundle info for nodes
+  $info = entity_get_info('node');
+  foreach ($info['bundles'] as $key => $bundle) {
+    // ignore protected data model elements
+    if (!in_array($key, array('cis_course', 'section'))) {
+      // elmsln core file API endpoints
+      $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/nodes/' . $key . 's'] = array(
+        'page callback' => '_elmsln_api_v1_page_callback',
+        'page arguments' => array($key, NULL, NULL),
+        'access callback' => 'user_is_logged_in',
+        'type' => MENU_CALLBACK,
+      );
+      $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/nodes/' . $key . 's/%'] = array(
+        'page callback' => '_elmsln_api_v1_page_callback',
+        'page arguments' => array($key, 5, 'query'),
+        'access callback' => 'user_is_logged_in',
+        'type' => MENU_CALLBACK,
+      );
+      $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/nodes/' . $key . 's/create'] = array(
+        'page callback' => '_elmsln_api_v1_page_callback',
+        'page arguments' => array($key, NULL, 5),
+        'access callback' => 'user_is_logged_in',
+        'type' => MENU_CALLBACK,
+      );
+      $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/nodes/' . $key . 's/%/update'] = array(
+        'page callback' => '_elmsln_api_v1_page_callback',
+        'page arguments' => array($key, 5, 6),
+        'access callback' => 'user_is_logged_in',
+        'type' => MENU_CALLBACK,
+      );
+      $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/nodes/' . $key . 's/%/delete'] = array(
+        'page callback' => '_elmsln_api_v1_page_callback',
+        'page arguments' => array('file', 5, 'delete'),
+        'access callback' => 'user_is_logged_in',
+        'type' => MENU_CALLBACK,
+      );
+    }
+  }
+  // elmsln core file API endpoints
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/comments'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('comment', NULL, NULL),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/comments/%'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('comment', 4, 'query'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/comments/create'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('comment', NULL, 'create'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/comments/%/update'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('comment', 4, 'update'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/comments/%/delete'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('comment', 5, 'delete'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  // elmsln core file API endpoints
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/files'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('file', NULL, NULL),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/files/%'] = array(
+    'page callback' => '_elmsln_api_v1_page_callback',
+    'page arguments' => array('file', 4, 'query'),
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+  // file entity required for these endpoints
+  if (module_exists('file_entity')) {
+    $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/files/create'] = array(
+      'page callback' => '_elmsln_api_v1_page_callback',
+      'page arguments' => array('file', NULL, 4),
+      'access callback' => 'user_is_logged_in',
+      'type' => MENU_CALLBACK,
+    );
+    $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/files/%/delete'] = array(
+      'page callback' => '_elmsln_api_v1_page_callback',
+      'page arguments' => array('file', 4, 'delete'),
+      'access callback' => 'user_is_logged_in',
+      'type' => MENU_CALLBACK,
+    );
+  }
+  // bridge for triggering back-end callbacks
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/bridge'] = array(
     'title' => 'ELMSLN API Bridge',
     'page callback' => '_elmsln_api_bridge',
     'page arguments' => array(1, 2, 3),
@@ -48,31 +177,725 @@ function elmsln_api_menu() {
     'access arguments' => array(array('administrator', 'instructor', 'staff')),
     'type' => MENU_CALLBACK,
   );
-  // tee-up our application
-  $items['api/v1/elmsln/user'] = array(
+  // user object for front-facing calls
+  $items[ELMSLN_API_BASE_PATH . '/v1/elmsln/user'] = array(
     'page callback' => '_elmsln_api_user_request',
     'access callback' => 'user_is_logged_in',
     'type' => MENU_CALLBACK,
   );
   return $items;
 }
+
+/**
+ * Helper function to clean up an multivalue array
+ * @param  object $entity entity
+ * @param  string $field  field name to check against
+ * @param  string $key    key storing the value we want
+ * @param  string $typecast   if this needs typecast, as what value
+ * @return array         cleaned up array of multiple values
+ */
+function _elmsln_api_multifield_clean($entity, $field, $key, $typecast = FALSE) {
+  $values = array();
+  // check for set
+  if (isset($entity->{$field}[LANGUAGE_NONE])) {
+    foreach ($entity->{$field}[LANGUAGE_NONE] as $order => $value) {
+      // check for typecasting
+      if ($typecast) {
+        $values[$order] = (int)$value[$key];
+      }
+      else {
+        $values[$order] = $value[$key];
+      }
+    }
+  }
+  return $values;
+}
+
+/**
+ * Implements hook_elmsln_jsapi_info().
+ */
+function elmsln_api_elmsln_jsapi_info() {
+  // file api router
+  $items['file'] = array(
+    'type'   => 'file',
+    'bundle' => 'file',
+    'modify' => '_elmsln_api_v1_file_modify',
+    'list'   => '_elmsln_api_v1_get_files',
+    'output' => '_elmsln_api_v1_file_output',
+  );
+  // support for comment entity
+  if (module_exists('comment')) {
+    $items['comment'] = array(
+      'type'   => 'comment',
+      'bundle' => 'comment',
+      'modify' => '_elmsln_api_v1_comment_modify',
+      'list'   => '_elmsln_api_v1_get_comments',
+      'output' => '_elmsln_api_v1_comment_output',
+    );
+  }
+  // fallback support for al built in node bundles
+  // this is for doing things generically though
+  // things like cle's specific endpoints will always
+  // be more flexible / accurate in data modeling
+  $info = entity_get_info('node');
+  foreach ($info['bundles'] as $key => $bundle) {
+    $items[$key] = array(
+      'type'   => 'node',
+      'bundle' => $key,
+      'modify' => '_elmsln_api_v1_node_modify',
+      'list'   => '_elmsln_api_v1_get_nodes',
+      'output' => '_elmsln_api_v1_node_output',
+    );
+  }
+  return $items;
+}
+
+/**
+ * Get all of the comments.
+ */
+function _elmsln_api_v1_get_comments($type, $filter = array()) {
+  $items = array();
+  $field_conditions = array();
+  $property_conditions = array('status' => array(NODE_PUBLISHED, '='));
+  if (isset($filter['comment'])) {
+    $property_conditions['cid'] = array($filter['comment'], '=');
+  }
+  $orderby = array();
+  $items = _cis_connector_assemble_entity_list('comment', 'comment', 'cid', '_entity', $field_conditions, $property_conditions, $orderby);
+  return $items;
+}
+
+/**
+ * ELMSLN JSapi callback for creating a comment.
+ */
+function _elmsln_api_v1_comment_modify($comment, $params = NULL) {
+  if (!isset($comment->cid)) {
+    $detail = t('Comment created');
+  }
+  else {
+    $detail = t('Comment updated');
+  }
+  // loop through supported parameters and set them for create or update
+  foreach ($params as $key => $value) {
+    // fields we support in a POST
+    switch ($key) {
+      case 'uid':
+      case 'nid':
+      case 'uuid':
+      case 'thread':
+      case 'status':
+        $comment->{$key} = $value;
+      break;
+      case 'title':
+        $comment->subject = $value;
+      break;
+      case 'body':
+        $comment->comment_body[LANGUAGE_NONE][0] = $value;
+      break;
+    }
+  }
+  // ensure we don't have anonymous creation since it's not possible
+  if (!isset($comment->uid) || $comment->uid == 0) {
+    $comment->uid = $GLOBALS['user']->uid;
+  }
+  comment_save($comment);
+  // output the newly created comment
+  $vars = array(
+    'status' => '200',
+    'detail' => $detail,
+    'comment' => (array) $comment,
+  );
+  return $vars;
+}
+
+/**
+ * Helper function that prepares a comment for api output.
+ */
+function _elmsln_api_v1_comment_output($comment) {
+  global $base_url;
+  // this will be our json formatted output
+  $return = array(
+    'id' => (int)$comment->cid,
+    'uid' => (int)$comment->uid,
+    'nid' => (int)$comment->nid,
+    'title' => $comment->subject,
+    'uuid' => $comment->uuid,
+    'thread' => $comment->thread,
+    'status' => (int)$comment->status,
+    'new' => (int)$comment->new,
+    'created' => Date('c', $comment->created),
+    'body' => ($comment->comment_body[LANGUAGE_NONE][0]['safe_value'] ? $comment->comment_body[LANGUAGE_NONE][0]['safe_value'] : $comment->comment_body[LANGUAGE_NONE][0]['value']),
+    'links' => array(
+      'self' => $base_url . '/api/v1/elmsln/comments/' . $comment->cid,
+      'node' => $base_url . '/node/' . $comment->nid,
+      'direct' => $base_url . '/comment/' . $comment->cid,
+    ),
+  );
+  // run through and build out all other properties assuming they arne't set
+  foreach ($comment as $key => $value) {
+    if( strpos($key, 'field_') === 0) {
+      $field = str_replace('field_', '', $key);
+      $field = explode('_', $field);
+      $name = '';
+      foreach ($field as $label) {
+        $name .= ucfirst($label);
+      }
+      $name = lcfirst($name);
+      if (!isset($return[$name])) {
+        $return[$name] = $value;
+      }
+    }
+  }
+
+  // developer support
+  if (module_exists('devel') && user_access('access devel information')) {
+    $return['links']['devel'] = $base_url . '/comment/' . $comment->cid .'/devel';
+  }
+
+  return $return;
+}
+
+/**
+ * Get all of the nodes of this bundle.
+ */
+function _elmsln_api_v1_get_nodes($type, $filter = array()) {
+  $items = array();
+  $field_conditions = array();
+  $property_conditions = array('status' => array(NODE_PUBLISHED, '='));
+  if (isset($filter[$type])) {
+    $property_conditions['nid'] = array($filter[$type], '=');
+  }
+  $orderby = array();
+  $items = _cis_connector_assemble_entity_list('node', $type, 'nid', '_entity', $field_conditions, $property_conditions, $orderby);
+  return $items;
+}
+
+/**
+ * ELMSLN JSapi callback for creating an assignment.
+ */
+function _elmsln_api_v1_node_modify($node, $params = NULL) {
+  // @todo support same generic smashed data model from output, tricky tho
+  if (!isset($node->nid)) {
+    $detail = t('Node created');
+  }
+  else {
+    $detail = t('Node updated');
+  }
+  // loop through supported parameters and set them for create or update
+  foreach ($params as $key => $value) {
+    // fields we support in a POST
+    switch ($key) {
+      case 'uid':
+      case 'nid':
+      case 'uuid':
+      case 'title':
+      case 'status':
+        $node->{$key} = $value;
+      break;
+      case 'body':
+        $node->body[LANGUAGE_NONE][0] = $value;
+      break;
+      default:
+        $node->{$key} = $value;
+        break;
+    }
+  }
+  // ensure we don't have anonymous creation since it's not possible
+  if (!isset($node->uid) || $node->uid == 0) {
+    $node->uid = $GLOBALS['user']->uid;
+  }
+  node_save($node);
+  // output the newly created node
+  $vars = array(
+    'status' => '200',
+    'detail' => $detail,
+    'node' => (array) $node,
+  );
+  return $vars;
+}
+
+/**
+ * Helper function that prepares an assignment for api output.
+ */
+function _elmsln_api_v1_node_output($node) {
+  global $base_url;
+  // this will be our json formatted output
+  $return = array(
+    'id' => (int)$node->nid,
+    'uid' => (int)$node->uid,
+    'uuid' => $node->uuid,
+    'title' => $node->title,
+    'type' => $node->type,
+    'status' => (int)$node->status,
+    'created' => Date('c', $node->created),
+  );
+  // run through and build out all other properties assuming they arne't set
+  foreach ($node as $key => $value) {
+    $field = str_replace('field_', '', $key);
+    $field = explode('_', $field);
+    $name = '';
+    foreach ($field as $label) {
+      $name .= ucfirst($label);
+    }
+    $name = lcfirst($name);
+    if (!isset($return[$name])) {
+      // we have something to send back, now clean up the return value
+      if (isset($value[LANGUAGE_NONE])) {
+        $value = $value[LANGUAGE_NONE];
+      }
+      if (is_array($value)) {
+        foreach ($value as $key => &$val) {
+          // leave it alone though this isn't common
+          if (!is_array($val)) {
+            // try to unserialize for funzies
+            $data = @unserialize($val);
+            if ($data !== false) {
+              $val = $data;
+            }
+            elseif (is_int($val)) {
+              $val = (int)$val;
+            }
+            elseif ($val == "b:0;") {
+              $val = 0;
+            }
+            elseif ($val == "b:1;") {
+              $val = 1;
+            }
+            elseif (is_numeric($val)) {
+              $val = (int)$val;
+            }
+            else {
+              // do nothing, it's exploded enough
+            }
+          }
+          elseif (isset($val['safe_value'])) {
+            $val = $val['safe_value'];
+          }
+          elseif (isset($val['value'])) {
+            $val = $val['value'];
+          }
+          elseif (isset($val['target_id'])) {
+            $val = $val['target_id'];
+          }
+          elseif (isset($val['jquery_colorpicker'])) {
+            $val = $val['jquery_colorpicker'];
+          }
+          elseif (isset($val['fid'])) {
+            $val = _elmsln_api_v1_file_output($val);
+          }
+        }
+      }
+      elseif (is_numeric($value)) {
+        $value = (int)$value;
+      }
+      else {
+        // try to unserialize for funzies
+        $data = @unserialize($value);
+        if ($data !== FALSE) {
+          $value = $data;
+        }
+        elseif ($value == "b:0;") {
+          $value = 0;
+        }
+        elseif ($value == "b:1;") {
+          $value = 1;
+        }
+      }
+      // last minute clean up to normalize a single array element
+      // that has no keys
+      if (is_array($value) && count($value) == 1) {
+        $value = array_pop($value);
+      }
+      $return[$name] = $value;
+    }
+  }
+
+  // mix in display modes
+  // links section
+  $return['links'] = array(
+    'self' => $base_url . '/api/v1/elmsln/nodes/' . $node->type . 's/' . $node->nid,
+    'direct' => $base_url . '/node/' . $node->nid,
+  );
+  // developer support
+  if (module_exists('devel') && user_access('access devel information')) {
+    $return['links']['devel'] = $base_url . '/node/' . $node->nid .'/devel';
+  }
+  // assemble view mode posibilities for these
+  $view_modes = array();
+  $entity_info = entity_get_info('node');
+  if (!empty($entity_info['view modes'])) {
+    $view_modes = array_keys($entity_info['view modes']);
+  }
+  // account for view mode tabs which isolates types
+  if (module_exists('view_mode_tab')) {
+    $view_mode_tab_settings = variable_get('view_mode_tab_settings__' . $node->type, array());
+    $enable_viewmode_default = variable_get('view_mode_enable_by_default', TRUE);
+    foreach ($view_modes as $key => $view_mode) {
+      $show = isset($view_mode_tab_settings[$view_mode]) ? $view_mode_tab_settings[$view_mode] : $enable_viewmode_default;
+      // remove if tabs say not to display this mode
+      if (!$show) {
+        unset($view_modes[$key]);
+      }
+    }
+  }
+  $returnmodes = array();
+  foreach ($view_modes as $mode) {
+    $returnmodes[$mode] = $base_url . '/api/v1/elmsln/nodes/' . $node->type . 's/' . $node->nid . '?display_mode=' . $mode;
+  }
+  $return['display_modes'] = $returnmodes;
+  // possibility of rendering w/ mode in the output
+  // allow for rendering based on a display_mode
+  if (isset($_GET['display_mode'])) {
+    $display_mode = check_plain($_GET['display_mode']);
+    $render_array = entity_view('node', array($node), $display_mode);
+    $return['rendered'] = drupal_render($render_array);
+  }
+  return $return;
+}
+
+/**
+ * Callback to modify the file entity.
+ * @param  object $file  loaded or newly prepared file object
+ * @param  array $params list of properties / fields to set
+ * @return array         response from API end-point
+ */
+function _elmsln_api_v1_file_modify($file, $params = NULL) {
+  $status = '403';
+  $data = explode(';base64,', $params['data']);
+  $ext = explode('/', $data[0]);
+  $extention = $ext[1];
+  // remove spaces, possible with iOS uploads
+  $image = base64_decode(str_replace(' ', '+', $data[1]));
+  // make sure jpg is jpeg for standardization purposes
+  $extention = str_replace('jpg', 'jpeg', $extention);
+  $fail = FALSE;
+  // image can be made
+  $img = @imagecreatefromstring($image);
+  if (!$img) {
+    $fail = TRUE;
+    $detail = t('Not a valid image resource.');
+  }
+  // size can be attained
+  $size = getimagesizefromstring($image);
+  if (!$size || 'image/' . $extention != $size['mime']) {
+    $fail = TRUE;
+    $detail = t('No valid image size details after upload, may be a corrupt image type.');
+  }
+  // if it is a valid image file and we like it, create it
+  if (!$fail && in_array($extention, array('png', 'gif', 'jpeg', 'jpg'))) {
+    if ($extention == 'jpeg') {
+      $extention = 'jpg';
+    }
+    // see if we had a file_wrapper defined, otherwise this is public
+    if (isset($params['file_wrapper'])) {
+      $file_wrapper = $params['file_wrapper'];
+    }
+    else {
+      $file_wrapper = 'public';
+    }
+    // save binary image in Drupal site's file wrapper directory
+    if ($file = file_save_data($image, $file_wrapper . '://user-image-' . $GLOBALS['user']->uid . '-' . uuid_generate() . '.' . $extention)) {
+      file_save($file);
+    }
+  }
+  else {
+    $detail = t('We only accept jpg, jpeg, png, and gif. @ext is not valid', array('@ext' => $extention));
+  }
+  // make sure we were able to create the file to generate a fid
+  if (!empty($file->fid)) {
+    $status = '200';
+    $detail = t('File created');
+    // kick off non-blocking image style generation
+    if (module_exists('imageinfo_cache')) {
+      $styles = image_styles();
+      // only process our core elmsln ones we care about
+      foreach ($styles as $style => $style_settings) {
+        // only pull in our elmsln core styles that are derivatives
+        // otherwise everything downstream will fail
+        if (!in_array($style, array('elmsln_gray', 'elmsln_normalize'))) {
+          unset($styles[$style]);
+        }
+      }
+      // generate background callback to build the image styles
+      $callback_options = array(
+        array(
+          'function' => '_elmsln_api_create_image_styles_call',
+          'blocking' => FALSE,
+        ),
+        array(
+          $file->uri,
+          image_style_path('elmsln_normalize', $file->uri),
+        ),
+        $styles,
+      );
+      // Queue up the request.
+      httprl_queue_background_callback($callback_options);
+      // Execute request.
+      $return = httprl_send_request();
+    }
+  }
+  // ensure we have details
+  if (!isset($detail)) {
+    $detail = t('File failed to be created.');
+  }
+  // output the newly created file
+  $vars = array(
+    'status' => $status,
+    'detail' => $detail,
+    'mime' => $extention,
+    'file' => _elmsln_api_v1_file_output($file),
+    'fid' => (int)$file->fid,
+  );
+  return $vars;
+}
+
+/**
+ * Helper function that prepares a file for api output.
+ */
+function _elmsln_api_v1_file_output($file) {
+  settype($file, 'array');
+  // return file object with a link directly to it
+  $file['url'] = file_create_url($file['uri']);
+  settype($file['fid'], 'int');
+  settype($file['uid'], 'int');
+  settype($file['filesize'], 'int');
+  settype($file['timestamp'], 'int');
+  settype($file['status'], 'int');
+  $file['created'] = Date('c', $file['timestamp']);
+  // special support for images
+  if (isset($file['type']) && $file['type'] == 'image') {
+    $styles = image_styles();
+    $derivatives = array('elmsln_gray');
+    $furi = image_style_path('elmsln_normalize', $file['uri']);
+    $file['image_styles'] = array(
+      'elmsln_normalize' => image_style_url('elmsln_normalize', $file['uri']),
+    );
+    foreach ($styles as $style => $style_settings) {
+      // only pull in our elmsln core styles, not normalizer though
+      if (strpos($style, 'elmsln_') === 0 && $style != 'elmsln_normalize') {
+        // normalize the item
+        $file['image_styles'][$style] = image_style_url($style, $furi);
+        foreach ($derivatives as $derivative) {
+          // ensure that style isn't the same as a the derivative
+          if ($style != $derivative) {
+            $file['image_styles'][$style . str_replace('elmsln', '_', $derivative)] = image_style_url($style, image_style_path($derivative, $furi));
+          }
+        }
+      }
+    }
+  }
+  return $file;
+}
+
+/**
+ * Generates all given presets given a file uri.
+ *
+ * @param array $fids
+ *   Array of file ids.
+ * @param array $styles
+ *   (optional) Styles to use from image_styles().
+ * @return array
+ *   An array of what was done.
+ */
+function _elmsln_api_create_image_styles_call(array $uris, array $styles = array()) {
+  // Generate image styles.
+  $return = array();
+  if (!empty($uris)) {
+    module_load_include('inc', 'imageinfo_cache', 'imageinfo_cache');
+    $return = imageinfo_cache_create_image_styles($uris, array(), $styles, FALSE);
+  }
+  return $return;
+}
+
+/**
+ * Helper function to return a list of all files.
+ */
+function _elmsln_api_v1_get_files($type, $filter = array()) {
+  $items = array();
+  $field_conditions = array();
+  $property_conditions = array();
+  if (isset($filter['file'])) {
+    $property_conditions['fid'] = array($filter['file'], '=');
+  }
+  $orderby = array();
+  $items = _cis_connector_assemble_entity_list('file', '', 'fid', '_entity', $field_conditions, $property_conditions, $orderby);
+  return $items;
+}
+
+/**
+ * Returns the menus available
+ */
+function _elmsln_api_v1_list_menus() {
+  $menus = menu_load_all();
+  $vars = array();
+  foreach ($menus as $menu_name => $menu) {
+    if (strpos($menu_name, 'menu-elmsln-') === 0) {
+      $vars[$menu_name] = $menu;
+      $vars[$menu_name]['links'] = array('self' =>
+        $GLOBALS['base_url'] . '/api/v1/elmsln/menus/' . $menu_name,
+      );
+    }
+  }
+  _elmsln_jsapi_deliver_output($vars);
+}
+
+/**
+ * Returns the menu links that this user can access from the given menu name.
+ */
+function _elmsln_api_v1_get_menu($menu_name) {
+  $vars = menu_load($menu_name);
+  $vars['tree'] = array();
+  $links = menu_load_links($menu_name);
+  foreach ($links as &$item) {
+    $item = menu_link_load($item['mlid']);
+    // ensure user can access this after loading
+    // otherwise don't include it in the tree
+    if ($item['access']) {
+      $link = $GLOBALS['base_url'] . '/' . $item['link_path'];
+      // account for pure container links
+      if ($item['link_path'] == '<nolink>') {
+        $link = NULL;
+      }
+      $vars['tree'][$item['mlid']] = array(
+        'title' => $item['link_title'],
+        'link' => $link,
+        'weight' => (int)$item['weight'],
+        'parent' => (int)$item['plid'],
+      );
+    }
+  }
+  _elmsln_jsapi_deliver_output($vars);
+}
+
+/**
+ * Callback to return the possible API endpoints.
+ * @return json
+ */
+function _elmsln_api_tree($search = ELMSLN_API_BASE_PATH, $deliver = TRUE) {
+  $tmp = explode('/', $search);
+  $apipaths = array();
+  $searchkey = array_pop($tmp);
+  $vars = array('links' => array());
+
+  // discover other parts of the API
+  $router = array_keys(menu_get_router());
+  // search the router for matches against our API base
+  foreach ($router as $item) {
+    if (strpos($item, $search) === 0) {
+      $apipaths[] = $item;
+    }
+  }
+  sort($apipaths);
+  foreach ($apipaths as $item) {
+    $item = str_replace($search, '', $item);
+    $pathary = explode('/', $item);
+    $prev = &$vars['links'];
+    foreach ($pathary as $tmp) {
+      if (!isset($prev[$tmp])) {
+        $prev[$tmp] = array('self' => $GLOBALS['base_url'] . '/' . $search . $item);
+      }
+      $prev = &$prev[$tmp];
+    }
+  }
+
+  // account for empty set correction, weird but needed
+  if (isset($vars['links'][''])) {
+    $vars['links'][$search] = $vars['links'][''];
+    unset($vars['links']['']);
+  }
+  // deliver to the screen or return array
+  if ($deliver) {
+    _elmsln_jsapi_deliver_output($vars);
+  }
+  else {
+    return $vars;
+  }
+}
+
+/**
+ * Return json output to the screen in correct format.
+ */
+function _elmsln_jsapi_deliver_output($vars) {
+  // nothing set so make it 200 even though it already is
+  if (empty($vars['status'])) {
+    $vars['status'] = '200';
+  }
+  // ensure there's some form of detail even if empty
+  if (empty($vars['detail'])) {
+    $vars['detail'] = '';
+  }
+  // ensure there's some form of detail even if empty
+  if (empty($vars['environment'])) {
+    $vars['environment'] = array();
+  }
+  // allow output delivery to be modified contextually
+  drupal_alter('elmsln_jsapi_deliver_output', $vars);
+  // define return type
+  drupal_add_http_header('Content-Type', 'application/json');
+  // define status
+  drupal_add_http_header('Status', $vars['status']);
+  // output the response as json
+  print drupal_json_output($vars);
+  // official drupal exit routines
+  exit;
+}
+
 /**
  * Page callback: returns information to establish a headless application
  * to connect to the site. This assumes a user session already exists.
  */
 function _elmsln_api_user_request() {
-  drupal_add_http_header('Content-Type', 'application/json');
+  $name = check_plain($GLOBALS['user']->name);
   $vars = array(
     'site' => array(
       'base-url' => $GLOBALS['base_url'],
     ),
     'user' => array(
       'uid' => $GLOBALS['user']->uid,
+      'uuid' => $GLOBALS['user']->uuid,
+      'name' => $name,
+      'displayName' => $name,
       'csrf-token' => drupal_get_token('restws'),
+      'roles' => $GLOBALS['user']->roles,
+      'permissions' => _elmsln_api_all_permissions(),
     ),
   );
-  print drupal_json_output($vars);
-  drupal_exit();
+  // allow others to jump in and modify the user object
+  drupal_alter('elmsln_jsapi_user_request', $vars);
+  _elmsln_jsapi_deliver_output($vars);
+}
+
+/**
+ * Return all permissions that the user account has access to.
+ * @see  user_access().
+ * @return array           all permissions of the user
+ */
+function _elmsln_api_all_permissions($account = NULL) {
+  global $user;
+
+  if (!isset($account)) {
+    $account = $user;
+  }
+
+  // To reduce the number of SQL queries, we cache the user's permissions
+  // in a static variable.
+  // Use the advanced drupal_static() pattern, since this is called very often.
+  static $drupal_static_fast;
+  if (!isset($drupal_static_fast)) {
+    $drupal_static_fast['perm'] = &drupal_static(__FUNCTION__);
+  }
+  $perm = &$drupal_static_fast['perm'];
+  if (!isset($perm[$account->uid])) {
+    $role_permissions = user_role_permissions($account->roles);
+
+    $perms = array();
+    foreach ($role_permissions as $one_role) {
+      $perms += $one_role;
+    }
+    $perm[$account->uid] = $perms;
+  }
+
+  return array_keys($perm[$account->uid]);
 }
 
 /**
@@ -115,9 +938,8 @@ function _elmsln_api_bridge($token, $api, $bucket) {
     $response = _elmsln_api_request($request);
     // decode and output the response as json; even if it failed which should
     // give us FALSE encoded as a bool appropriately
-    echo drupal_json_output($response);
+    _elmsln_jsapi_deliver_output($response);
   }
-  exit;
 }
 /**
  * ELMSLN API request handler
@@ -1016,6 +1838,243 @@ function _elmsln_api_is_alive(&$buckets) {
 }
 
 /**
+ * Page Callback that will handle all of the incoming api calls.
+ */
+function _elmsln_api_v1_page_callback($type, $etid = NULL, $op = NULL) {
+  // if it got this far then that means the user is hitting and enpoint that doesn't exist.
+  $vars = array(
+    'status' => '400',
+    'detail' => 'Invalid endpoint',
+  );
+  // CSRF protection on write operations.
+  if (!in_array($_SERVER['REQUEST_METHOD'], array('GET', 'HEAD', 'OPTIONS', 'TRACE')) && !restws_csrf_validation()) {
+    restws_terminate_request('403 Forbidden', '403 Access Denied: CSRF validation failed');
+  }
+  $jsapis = elmsln_api_get_elmsln_jsapis();
+  // see if we have triggered a defined endpoint for loading this bundle
+  if (isset($jsapis[$type])) {
+    if (is_null($op) || $op == 'query') {
+      $path = current_path();
+      if (is_null($etid)) {
+        // check the url parmas for filters
+        $params = drupal_get_query_parameters();
+      }
+      else {
+        $params[$type] = $etid;
+        $path = str_replace('/' . $etid, '', $path);
+      }
+      $vars = _elmsln_api_tree($path, FALSE);
+      $params = filter_var_array($params, FILTER_SANITIZE_STRING);
+      $items = call_user_func($jsapis[$type]['list'], $type, $params);
+      // get the assignment ready for sending and place them as an array of items
+      // under the 'data' property
+      foreach ($items as $item) {
+        // ensure the user is allowed to see these things we queried
+        if (entity_access('view', $jsapis[$type]['type'], $item)) {
+          $_item = call_user_func($jsapis[$type]['output'], $item);
+          $vars['data'][] = $_item;
+        }
+      }
+    }
+    else {
+      $info = entity_get_info($jsapis[$type]['type']);
+      switch ($op) {
+        case 'create':
+          // nodes we populate a lot more fields for defaults
+          if ($jsapis[$type]['type'] == 'node') {
+            $entity = _elmsln_api_stub_node($jsapis[$type]['bundle']);
+          }
+          else {
+            $entity = entity_create($jsapis[$type]['type'], array($info['entity keys']['bundle'] => $jsapis[$type]['bundle']));
+          }
+          $failed = FALSE;
+          // verify they can create this
+          if ($jsapis[$type]['type'] == 'file') {
+            // pass down the $_POST to the create callback
+            $payload = file_get_contents('php://input');
+            $payload = drupal_json_decode($payload);
+            $params = array();
+            if (is_array($payload)) {
+              $params = $payload;
+            }
+            // ensure we have a type before checking against it
+            if (isset($params['type']) && entity_access('create', 'file', $params['type'])) {
+              $vars = call_user_func($jsapis[$type]['modify'], $entity, $params);
+            }
+            else {
+              $failed = TRUE;
+            }
+          }
+          else if (entity_access('create', $jsapis[$type]['type'], $entity)) {
+            // pass down the $_POST to the create callback
+            $payload = file_get_contents('php://input');
+            $payload = drupal_json_decode($payload);
+            $params = array();
+            if (is_array($payload)) {
+              $params = $payload;
+            }
+            $vars = call_user_func($jsapis[$type]['modify'], $entity, $params);
+          }
+          else {
+            $failed = TRUE;
+          }
+          // return dead case if it failed prechecks
+          if ($failed) {
+            $vars = array(
+              'status' => '403',
+              'detail' => t('Precondition failed: Entity access denied to create @bundle.', array('@bundle' => $jsapis[$type]['bundle'])),
+              'debug' => $entity,
+            );
+          }
+        break;
+        case 'update':
+          $entity = entity_load_single($jsapis[$type]['type'], $etid);
+          // ensure this type and id load correctly
+          if ($entity->{$info['entity keys']['id']} == $etid && $entity->{$info['entity keys']['bundle']} == $jsapis[$type]['bundle'] && entity_access('update', $jsapis[$type]['type'], $entity)) {
+            // pass down the $_POST to the create callback
+            $payload = file_get_contents('php://input');
+            $payload = drupal_json_decode($payload);
+            $params = array();
+            if (is_array($payload)) {
+              $params = $payload;
+            }
+            $vars = call_user_func($jsapis[$type]['modify'], $entity, $params);
+          }
+          else {
+            $vars = array(
+              'status' => '403',
+              'detail' => 'Access denied to update etid ' . $etid,
+            );
+          }
+        break;
+        case 'delete':
+          $entity = entity_load_single($jsapis[$type]['type'], $etid);
+          $vars = $info;
+          // ensure this is being used to delete the exact id and end point
+          // type to ensure we don't have our calls incorrect
+          if ($entity->{$info['entity keys']['id']} == $etid && entity_access('delete', $jsapis[$type]['type'], $entity)) {
+            entity_delete($jsapis[$type]['type'], $etid);
+            $vars = array(
+              'status' => '200',
+              'detail' => 'etid ' . $etid . ' deleted',
+              'entity' => serialize($entity),
+            );
+          }
+          else {
+            $vars = array(
+              'status' => '403',
+              'detail' => 'Access denied to delete etid ' . $etid,
+            );
+          }
+        break;
+        case 'fields':
+          // only makes sense for nodes
+          if ($jsapis[$type]['type'] == 'node') {
+            module_load_include('inc', 'node', 'node.pages');
+            if (is_null($etid)) {
+              $entity = _elmsln_api_stub_node($jsapis[$type]['bundle']);
+            }
+            else {
+              $entity = entity_load_single($jsapis[$type]['type'], $etid);
+              if ($entity->{$info['entity keys']['id']} == $etid && $entity->{$info['entity keys']['bundle']} == $jsapis[$type]['bundle'] && entity_access('update', $jsapis[$type]['type'], $entity)) {
+                $entity = entity_load_single($jsapis[$type]['type'], $etid);
+              }
+              else {
+                unset($entity);
+                $vars = array(
+                  'status' => '403',
+                  'detail' => 'Access denied to view fields against etid ' . $etid,
+                );
+              }
+            }
+            if (isset($entity)) {
+              $form_output = drupal_get_form($jsapis[$type]['bundle'] . '_' . $jsapis[$type]['type'] . '_form', $entity);
+              foreach($form_output as $key => $field) {
+                // strip out stuff that's for design / hierarchy purposes
+                if (strpos($key, '#') === 0 || in_array($key, array('comment_settings', 'path', 'revision_information', 'author', 'options'))) {
+                  unset($form_output[$key]);
+                }
+              }
+              $vars = array(
+                'status' => '200',
+                'detail' => $jsapis[$type]['bundle'] . ' fields',
+                'fields' => serialize($form_output),
+              );
+            }
+          }
+          else {
+            $vars = array(
+              'status' => '403',
+              'detail' => 'Access denied to view fields against non-node bundles',
+            );
+          }
+        break;
+      }
+    }
+  }
+  // send back the message to the screen, most likely a webservice
+  _elmsln_jsapi_deliver_output($vars);
+}
+
+/**
+ * Generates a stub node for population.
+ * @see  _cle_assignment_v1_assignment_create()
+ * @param  string $type bundle / node type
+ * @return object       start of a node for creation
+ */
+function _elmsln_api_stub_node($type) {
+  $node = new stdClass();
+  $node->type = $type;
+  node_object_prepare($node);
+  $node->language = LANGUAGE_NONE;
+  $node->uid = $GLOBALS['user']->uid;
+  $node->name = (isset($GLOBALS['user']->name) ? $GLOBALS['user']->name : '');
+  $node->status = 1;
+  $node->promote = 0;
+  $node->revision = 1;
+  $node->title = 'new ' . $type;
+  return $node;
+}
+
+/**
+ * Helper function to convert a drupal date field into formatted
+ * start and end dates
+ *
+ * @param date_field
+ *
+ * @return array($start,$end)
+ */
+function _elmsln_api_format_date_field($date_field) {
+  $start = null;
+  $end = null;
+
+  if (isset($date_field['value'])) {
+    if (isset($date_field['value2'])) {
+      //start and end date
+      $start = Date('c', $date_field['value']);
+      $end = Date('c', $date_field['value2']);
+    }
+    else {
+      // end date only
+      $end = Date('c', $date_field['value']);
+    }
+  }
+
+  return array($start, $end);
+}
+
+/**
+ * Return all available elmsln jsapis
+ * @return array  possible callbacks for delivering assets.
+ */
+function elmsln_api_get_elmsln_jsapis() {
+  $ary = array();
+  $ary = module_invoke_all('elmsln_jsapi_info');
+  drupal_alter('elmsln_jsapi_info', $ary);
+  return $ary;
+}
+
+/**
  * Implements hook_elmsln_api_info().
  */
 function elmsln_api_elmsln_api_info() {
@@ -1075,4 +2134,3 @@ function elmsln_api_elmsln_api_info() {
 
   return $callbacks;
 }
-
