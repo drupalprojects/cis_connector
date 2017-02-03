@@ -324,6 +324,10 @@ function _cis_connector_format_address($settings, $instance = '', $method = 'ser
     $address = $settings['protocol'] . '://';
     // allow for front end link or data connection
     if ($method == 'service') {
+      // allow for alternate service protocol potentially
+      if (isset($settings['dataprotocol'])) {
+        $address = $settings['dataprotocol'] . '://';
+      }
       // optional HTTP authenticated request, required in any *real* environment
       if (isset($settings['user'])) {
         $address .= $settings['user'] . ':' . $settings['pass'] . '@';
@@ -488,13 +492,20 @@ function _cis_connector_course_context() {
           return $course;
         }
         // check for GET in address bar
-        if (isset($_GET['elmsln_course'])) {
+        if (isset($_GET['elmsln_course']) && $_GET['elmsln_course'] != 1) {
           $course = $_GET['elmsln_course'];
           return $course;
         }
         // bleh case scenario, we need to start loading some nodes and what not
         // see if this is on a node, then check if we are in an authority
-        if ($node = menu_get_object('node', 1, arg(0) . '/' . arg(1))) {
+        $node = menu_get_object('node', 1, arg(0) . '/' . arg(1));
+        // BEYOND EDGECASE: see if this is a redirect internal to itself
+        if (empty($node) && (arg(0) . '/' . arg(1) == 'elmsln/redirect') && arg(2) == elmsln_core_get_profile_key()) {
+          $parts = explode('/', $_SERVER['HTTP_REFERER']);
+          $node = menu_get_object('node', 1, $parts[3] . '/' . $parts[4]);
+        }
+        // see if we have a node in scope to dig into
+        if (!empty($node)) {
           // test for authority course type
           if ($node->type == 'cis_course' && isset($node->field_course_machine_name['und'][0]['value'])) {
             $course = $node->field_course_machine_name['und'][0]['value'];
@@ -506,8 +517,8 @@ function _cis_connector_course_context() {
             return $course;
           }
           // see if we are on a section
-          elseif ($node->type == 'section' && isset($node->field_section_course_ref['und'][0]['entity'])) {
-            $node = $node->field_section_course_ref['und'][0]['entity'];
+          elseif ($node->type == 'section' && isset($node->field_section_course_ref['und'][0]['target_id'])) {
+            $node = node_load($node->field_section_course_ref['und'][0]['target_id']);
             if ($node->type == 'cis_course' && isset($node->field_course_machine_name['und'][0]['value'])) {
               $course = $node->field_course_machine_name['und'][0]['value'];
               return $course;
@@ -515,8 +526,8 @@ function _cis_connector_course_context() {
           }
           // see if we are on something that references a course
           // if it does, run the previous test again
-          elseif (isset($node->field_cis_course_ref['und'][0]['entity'])) {
-            $node = $node->field_cis_course_ref['und'][0]['entity'];
+          elseif (isset($node->field_cis_course_ref['und'][0]['target_id'])) {
+            $node = node_load($node->field_cis_course_ref['und'][0]['target_id']);
             if ($node->type == 'cis_course' && isset($node->field_course_machine_name['und'][0]['value'])) {
               $course = $node->field_course_machine_name['und'][0]['value'];
               return $course;
@@ -564,10 +575,15 @@ function _cis_connector_section_context($account = NULL) {
       $section = FALSE;
       return $section;
     }
+    // check for GET in address bar
+    if (isset($_GET['elmsln_section']) && $_GET['elmsln_section'] != 1) {
+      $section = $_GET['elmsln_section'];
+      return $section;
+    }
     // check for global session override
     if (isset($_SESSION['cis_section_context'])) {
       $section = $_SESSION['cis_section_context'];
-      return $_SESSION['cis_section_context'];
+      return $section;
     }
     // use current user if acount is not set
     if (empty($account)) {
@@ -695,6 +711,16 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
           drupal_set_message(t('This page is blank because you are currently viewing the Master section. To update these values per course section please access the <a href="@url" class="accessible-red-text">Course information system</a>.', array('@url' => $cisaddress)), 'status', FALSE);
         }
       }
+      // if someone setting up the space, offer them ability to switch quickly to section
+      if (_cis_connector_role_groupings(array('staff', 'teacher'))) {
+        drupal_set_message(t('Try setting a section to view in order to see how students from that section will see it.'));
+        $form = drupal_get_form('cis_service_connection_block_section_context_changer_form');
+        $output = drupal_render($form);
+        return array(
+          'value' => $output,
+          'format' => 'textbook_editor',
+        );
+      }
       return array();
     }
   }
@@ -724,7 +750,7 @@ function _cis_connector_transaction($request, $format = 'default', $query = arra
       // check for section context existing; if it doesn't then
       // we know we are in an authority system and need to make a more complex
       // request for the systems in use by ANY section of this course
-      if (_cis_connector_is_master($section) || in_array($section, array('default', NULL, FALSE)) !== FALSE) {
+      if (!empty(_cis_connector_course_context()) && (_cis_connector_is_master($section) || in_array($section, array('default', NULL, FALSE)) !== FALSE)) {
         $query = array(
           'status' => 1,
           'field_machine_name' => _cis_connector_course_context(),
@@ -1415,7 +1441,7 @@ function cis_connector_libraries_info_file_paths() {
  * @param $id_field mixed
  *   field to use for the key in the array
  * @param $title_field mixed
- *   field to use as the value in the array
+ *   field to use as the value in the array, optionally can be _entity for full entity object
  * @param $field_conditions array
  *   (optional) additional conditions to apply to field filtering
  * @param $property_conditions array
@@ -1434,7 +1460,7 @@ function _cis_connector_assemble_entity_list($entity_type, $bundle, $id_field, $
   $query = new EntityFieldQuery;
   $query->entityCondition('entity_type', $entity_type);
   // EFQs of user entities fail since it has no bundle
-  if ($entity_type != 'user') {
+  if (!in_array($entity_type, array('user', 'file', 'comment'))) {
     $query->entityCondition('bundle', $bundle);
   }
   else {
@@ -1506,8 +1532,11 @@ function _cis_connector_assemble_entity_list($entity_type, $bundle, $id_field, $
     }
   }
   else {
-    // simple title sort
-    $query->propertyOrderBy($title_field);
+    // special case for title field being the full on entity
+    if ($title_field != '_entity') {
+      // simple title sort
+      $query->propertyOrderBy($title_field);
+    }
   }
   // allow for strict entity permissions or by-passing to get a true listing
   // this is useful when trying to perform system operations as opposed to
@@ -1547,7 +1576,13 @@ function _cis_connector_assemble_entity_list($entity_type, $bundle, $id_field, $
       else {
         $key = $entity->{$id_field};
       }
-      $options[$key] = $entity->{$title_field};
+      // special case for title field being the full on entity
+      if ($title_field == '_entity') {
+        $options[$key] = $entity;
+      }
+      else {
+        $options[$key] = $entity->{$title_field};
+      }
     }
   }
   return $options;
