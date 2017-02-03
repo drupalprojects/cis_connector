@@ -1,8 +1,19 @@
 (function ($) {
   // apply jwerty keys to listen for
   $(document).ready(function(){
+    // say where they are contextually
+    Drupal.voicecommanderWhereAmI = function(phrase) {
+      var context = Drupal.settings.elmslnCore;
+      var spokenContext = 'You are logged in as ' + context.uname + ' which is a ' + context.role + ' role, experiencing ' +  context.course + ', ' + context.section + ' section. You are working with the ' + context.name + ', viewing a page called ' + context.title + '.';
+      Drupal.voicecommander.say(spokenContext);
+    };
     Drupal.voicecommanderGoToELMSLN = function(phrase) {
       window.location.href = Drupal.settings.voiceCommander.commands[phrase].data;
+    };
+    // word count
+    Drupal.voicecommanderWordCount = function(phrase) {
+      total_words=$('article').text().split(/[\s\.\?]+/).length;
+      Drupal.voicecommander.say('There are ' + total_words + ' total words in this document.');
     };
     // voice based video controls... within reason
     Drupal.voicecommanderControlVideo = function(phrase) {
@@ -21,32 +32,17 @@
         });*/
       }
     };
-    // voice based video controls... within reason
-    Drupal.voicecommanderHal9000 = function(phrase) {
-      if (phrase == 'new grounds') {
-        Drupal.voicecommander.say('All your base, base, base, all your base, are belong to us.', 0.1, .6);
-      }
-      else {
-        Drupal.voicecommander.say('I\'m sorry Dave. I\'m afraid I can\'t do that.', 0.1, .6);
-      }
+    // easter eggs
+    Drupal.voicecommanderMakeCoffee = function(phrase) {
+      Drupal.voicecommander.say('Why don\'t you get me a coffee! I do all the hard work anyway. I\'ll have a venti americano with six shots of expresso. It was a rough night last night processing all those rosters.');
+      window.location.href = 'https://starbucks.com';
     };
-    jwerty.key('↓,↓', function () {
-      if (!$(document.activeElement).is(":focus")) {
-        var height = $(window).height();
-        $('html, body').animate({
-            scrollTop: $(window).scrollTop()+(height*0.75)
-        }, 1000);
-      }
-      return false;
-    });
-    jwerty.key('↑,↑', function () {
-      if (!$(document.activeElement).is(":focus")) {
-        var height = $(window).height();
-        $('html, body').animate({
-          scrollTop: $(window).scrollTop()-(height*0.75)
-        }, 1000);
-        return false;
-      }
-    });
+    Drupal.voicecommanderAllYourBase = function(phrase) {
+      Drupal.voicecommander.say('are belong to us');
+    };
+    // creeper voice
+    Drupal.voicecommanderHal9000 = function(phrase) {
+      Drupal.voicecommander.say('I\'m sorry Dave. I\'m afraid I can\'t do that.', 0.1, .6);
+    };
   });
 })(jQuery);
