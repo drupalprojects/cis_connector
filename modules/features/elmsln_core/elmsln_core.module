@@ -405,8 +405,6 @@ function _elmsln_core_data_access($etype, $entity) {
  */
 function elmsln_core_node_view($node, $view_mode, $langcode) {
   if ($view_mode == 'full' && $node->type == 'page' && module_exists('foundation_access_ux')) {
-    // @todo render this list of in context items
-    //$links = _elmsln_core_in_context_list();
     // only do this for nodes for now
     if ($node && !empty($node->content['body']) && isset($node->content['body'][0]['#markup'])) {
       // add items in context
@@ -416,7 +414,10 @@ function elmsln_core_node_view($node, $view_mode, $langcode) {
         // pregmatch all paragraphs for simplicity
         preg_match_all($search, $node->content['body'][0]['#markup'], $results);
         $node->content['body'][0]['#markup'] = preg_replace_callback($search, '_elmsln_core_paragraph_replace', $node->content['body'][0]['#markup']);
-        drupal_add_js(drupal_get_path('module', 'elmsln_core') . '/js/elmsln-core-in-context.js');
+        // @todo comment this back in once we get the other types in place for this capability
+        //drupal_add_js(drupal_get_path('module', 'elmsln_core') . '/js/elmsln-core-in-context.js');
+        // @todo render this list of in context items
+        //$links = _elmsln_core_in_context_list();
       }
       $lmsless_classes = _cis_lmsless_get_distro_classes(elmsln_core_get_profile_key());
       // target the scrollspy template style
@@ -427,7 +428,7 @@ function elmsln_core_node_view($node, $view_mode, $langcode) {
       // ensure we have headings in the body of the document
       if (count($results) == 5 && count($results[0]) > 1) {
         // loop through items found
-        $scrollspy = '<div id="scrollspy-nav" class="hide-on-med-and-down"><h2 class="element-invisible">' . t('Page contents') . '</h2><ul class="scrollspy-toc table-of-contents ' . $lmsless_classes['color'] . '-border">';
+        $scrollspy = '<div id="scrollspy-nav" class="hide-on-med-and-down"><h2 class="element-invisible">' . t('Page contents') . '</h2><ul class="scrollspy-toc table-of-contents">';
         foreach ($results[0] as $key => $result) {
           $tmp = strip_tags(trim($results[3][$key]));
           if (!empty($tmp)) {
@@ -623,11 +624,11 @@ function _elmsln_core_remote_redirect($tool, $type, $etid, $op) {
     if (isset($_GET['destination'])) {
       $address .= '?destination=' . $_GET['destination'];
       if (isset($_GET['elmsln_course'])) {
-        $address .= '&elmsln_course=' . $_GET['elmsln_course'];
+        $address .= '&elmsln_course=' . _cis_connector_course_context();
       }
     }
     elseif (isset($_GET['elmsln_course'])) {
-      $address .= '?elmsln_course=' . $_GET['elmsln_course'];
+      $address .= '?elmsln_course=' . _cis_connector_course_context();
     }
     // figure out the redirect path as dictated by forms
     if (isset($_GET['redirectPath'])) {
@@ -714,7 +715,14 @@ function elmsln_core_drupal_goto_alter(&$path, &$options, &$http_response_code) 
     // but is instead pointed to via one, this should ensure that we only ever
     // do our remote cid destruction when needed and in the correct direction!
     if (isset($_GET['elmsln_course'])) {
-      $options['query']['elmsln_course'] = filter_xss($_GET['elmsln_course']);
+      // support defining course context at time of redirect
+      // avoids some NASTY cache redirect loop issues
+      if ($_GET['elmsln_course'] == 1) {
+        $options['query']['elmsln_course'] = _cis_connector_course_context();
+      }
+      else {
+        $options['query']['elmsln_course'] = filter_xss($_GET['elmsln_course']);
+      }
     }
     if (isset($_GET['addHash'])) {
       $options['query']['addHash'] = filter_xss($_GET['addHash']);
@@ -796,6 +804,7 @@ function elmsln_core_page_build(&$page) {
   // the client side. This clears up MULTIPLE issues at once and is
   // awesome!
   $cfg = _elmsln_core_get_cfg();
+  $settings = _cis_connector_build_registry(elmsln_core_get_profile_key());
   // see if this is an active learner or not, only thing we care about currently
   // @todo probably faster way of getting this info
   if (_cis_connector_role_grouping('active learner')) {
@@ -820,11 +829,14 @@ function elmsln_core_page_build(&$page) {
   $js_variables = array(
     'elmslnCore' => array(
       'domain' => '.' . $cfg['address'],
+      'name' => $settings['default_title'],
+      'distro' => elmsln_core_get_profile_key(),
       'course' => _cis_connector_course_context(),
       'section' => _cis_connector_section_context(),
       'title' => drupal_get_title(),
       'url' => url(current_path(), array('absolute' => TRUE)),
       'role' => $role,
+      'uname' => filter_xss($GLOBALS['user']->name),
       'xapisession' => drupal_get_token($uuid),
     )
   );
@@ -918,6 +930,26 @@ function elmsln_core_admin_paths() {
 }
 
 /**
+ * Implements hook_form_node_form_alter().
+ */
+function elmsln_core_form_node_form_alter(&$form, &$form_state, $form_id) {
+  // only apply these to new nodes
+  if (arg(0) == 'node' && arg(1) == 'add') {
+    // prepopulate course and section references if they exist
+    if (isset($form['field_cis_course_ref']['und']['#default_value']) && empty($form['field_cis_course_ref']['und']['#default_value']
+  ) && $course_nid = _cis_connector_get_course_by_machine_name(_cis_connector_course_context())) {
+      $form['field_cis_course_ref']['und']['#default_value'] = $course_nid;
+    }
+    // prepopulate section reference if it exists in the current context for whatever reason
+    // and hasn't existed previously but ONLY for new stuff
+    if (isset($form['og_group_ref']['und'][0]['default']['#default_value']) && empty($form['og_group_ref']['und'][0]['default']['#default_value']
+  ) && $section_nid = _cis_section_load_section_by_id(_cis_connector_section_context())) {
+      $form['og_group_ref']['und'][0]['default']['#default_value'] = $section_nid;
+    }
+  }
+}
+
+/**
  * Implements hook_form_FORM_ID_alter().
  */
 function elmsln_core_form_a11y_admin_settings_alter(&$form, &$form_state) {
@@ -961,6 +993,9 @@ function elmsln_core_url_inbound_alter(&$path, $original_path, $path_language) {
       // check for transition from authority to service as name of section changes
       if (_cis_connector_is_master($section_id) && _cis_connector_system_type() == 'service' && strpos($section_id, '_')) {
         $section_id = CIS_SECTION_MASTER;
+      }
+      elseif(_cis_connector_is_master($section_id) && _cis_connector_system_type() == 'authority') {
+        $section_id = CIS_SECTION_MASTER . '_' . _cis_connector_course_context();
       }
       // set the active session
       $_SESSION['cis_section_context'] = $section_id;
@@ -1069,6 +1104,7 @@ function elmsln_core_fa_a11y() {
           'form-wrapper',
           'collapsed',
         ),
+        'data-voicecommand' => 'keyboard shortcuts',
       ),
       '#materialize' => array(
         'type' => 'collapsible',
@@ -1081,16 +1117,6 @@ function elmsln_core_fa_a11y() {
             <span>' . t('View options') . '</span>
             <div class="keyboard-short__key">Alt</div>
             <div class="keyboard-short__key">Shift</div>
-          </div>
-          <div class="keyboard-short__group">
-            <span>' . t('Scroll down') . '</span>
-            <div class="keyboard-short__key">↓</div>
-            <div class="keyboard-short__key">↓</div>
-          </div>
-          <div class="keyboard-short__group">
-            <span>' . t('Scroll back to top') . '</span>
-            <div class="keyboard-short__key">↑</div>
-            <div class="keyboard-short__key">↑</div>
           </div>
         </div>'
       ),
@@ -1109,11 +1135,20 @@ function elmsln_core_voice_command() {
   $commands["%phrase pause (video)"] =  array(
     'callback' => 'Drupal.voicecommanderControlVideo',
   );
+  $commands["%phrase where am i"] =  array(
+    'callback' => 'Drupal.voicecommanderWhereAmI',
+  );
+  $commands["%phrase word count"] =  array(
+    'callback' => 'Drupal.voicecommanderWordCount',
+  );
+  $commands["make coffee"] =  array(
+    'callback' => 'Drupal.voicecommanderMakeCoffee',
+  );
+  $commands["all your base"] =  array(
+    'callback' => 'Drupal.voicecommanderAllYourBase',
+  );
   if (arg(1) == 'error') {
     $commands["open the pod bay doors"] =  array(
-      'callback' => 'Drupal.voicecommanderHal9000',
-    );
-    $commands["new grounds"] =  array(
       'callback' => 'Drupal.voicecommanderHal9000',
     );
   }
@@ -1175,6 +1210,26 @@ function _elmsln_core_icon_map() {
         'color' => 'red',
         'icon' => 'school',
       ),
+      'program' => array(
+        'color' => 'pink',
+        'icon' => 'code',
+      ),
+      'academic_area' => array(
+        'color' => 'green',
+        'icon' => 'account_balance',
+      ),
+      'global_resource' => array(
+        'color' => 'indigo',
+        'icon' => 'cloud',
+      ),
+      'course_access' => array(
+        'color' => 'blue',
+        'icon' => 'school',
+      ),
+      'system_access' => array(
+        'color' => 'indigo',
+        'icon' => 'cloud',
+      ),
       'calendar_event' => array(
         'color' => 'green',
         'icon' => 'event',
@@ -1200,7 +1255,7 @@ function _elmsln_core_icon_map() {
         'icon' => 'local_activity',
       ),
       'image' => array(
-        'color' => 'amber',
+        'color' => 'deep-purple',
         'icon' => 'photo',
       ),
       'image_gallery' => array(
@@ -1302,6 +1357,10 @@ function elmsln_core_cis_service_registry_alter(&$keychain) {
               'mail' => strtoupper('SERVICE_' . $distro . '_' . $cfg['host']) . '@' . $cfg['emailending'],
               'pass' => drupal_substr(hash('sha512', $distro . $cfg['salt']), 0, 30),
             );
+            // support for alternate data- protocol for backend
+            if (isset($cfg['dataprotocol'])) {
+              $keychain[$distro]['dataprotocol'] = $cfg['dataprotocol'];
+            }
             $file = file_get_contents($directory . $item . '/' . $distro . '.topology');
             $lines = explode("\n", $file);
             // read each line of the cfg file
@@ -1447,6 +1506,25 @@ function elmsln_core_theme($existing, $type, $theme, $path) {
  */
 function elmsln_core_tincanapi_ajax_data_alter($module_name, &$data, $context) {
   $settings = array();
+  // account for our own statements to pass through
+  if ($module_name == 'elmsln_core') {
+    $data['verb'] = array(
+      'id' => 'http://adlnet.gov/expapi/verbs/' . $context['verb'],
+      'display' => array(
+        'en-US' => $context['verb']
+      )
+    );
+    $data['object'] = array(
+      "objectType" => "Activity",
+      "id" => $context['id'],
+      "definition" => array(
+        "name" => array(
+          "en-US" => "Page: " . $context['title'],
+        ),
+        "type" => "http://orw.iminds.be/tincan/content/type/page"
+      )
+    );
+  }
   // regardless of module see if our contextual settings are here
   // and this way we can ship down elmslnCore's scope variables
   // which will make our data-sets more meaningful for searching in LRSs later
@@ -1761,7 +1839,8 @@ function elmsln_core_wrapped_paths() {
     '*' => TRUE,
     'user/*' => FALSE,
     'user/*/*' => FALSE,
-    'cle/*' => FALSE,
+    'cle/app' => FALSE,
+    'cle/app/*' => FALSE,
   );
   return $paths;
 }
@@ -1773,11 +1852,13 @@ function elmsln_core_cis_lmsless_color_alter(&$map) {
   if ($registry = _cis_connector_build_registry()) {
     foreach ($registry as $distro => $settings) {
       $map[$distro] = array(
-        'dark'   => (isset($settings['color_dark']) ? $settings['color_dark'] : $map['_default_']['color_dark']),
-        'light'  => (isset($settings['color_light']) ? $settings['color_light'] : $map['_default_']['color_light']),
+        'dark'   => (isset($settings['color_dark']) ? $settings['color_dark'] : $map['_default_']['dark']),
+        'light'  => (isset($settings['color_light']) ? $settings['color_light'] : $map['_default_']['light']),
         'color' => (isset($settings['color']) ? $settings['color'] : $map['_default_']['color']),
-        'text' => (isset($settings['color_text']) ? $settings['color_text'] : $map['_default_']['color_text']),
-        'outline' => (isset($settings['color_outline']) ? $settings['color_outline'] : $map['_default_']['color_outline']),
+        'text' => (isset($settings['color_text']) ? $settings['color_text'] : $map['_default_']['text']),
+        'outline' => (isset($settings['color_outline']) ? $settings['color_outline'] : $map['_default_']['outline']),
+        'code' => (isset($settings['color_code']) ? $settings['color_code'] : $map['_default_']['code']),
+        'code_text' => (isset($settings['color_code_text']) ? $settings['color_code_text'] : $map['_default_']['code_text']),
       );
     }
   }
